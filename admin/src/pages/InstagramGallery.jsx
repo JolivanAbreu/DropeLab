@@ -116,7 +116,7 @@ export default function InstagramGallery() {
             {form.imageUrl ? (
               <div className="flex items-center gap-3">
                 <img src={form.imageUrl} alt="" className="h-16 w-16 rounded object-cover" />
-                <button type="button" onClick={() => setForm({ ...form, imageUrl: '' })} className="text-xs text-ink-soft underline decoration-dotted hover:text-danger">
+                <button type="button" onClick={() => setForm({ ...form, imageUrl: '' })} className="text-xs text-ink-soft underline decoration-dotted hover:text-danger-bg">
                   trocar foto
                 </button>
               </div>
@@ -126,7 +126,7 @@ export default function InstagramGallery() {
                 <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
               </label>
             )}
-            {uploadError && <p className="mt-1 text-xs text-danger">{uploadError}</p>}
+            {uploadError && <p className="mt-1 text-xs text-danger-bg">{uploadError}</p>}
           </Field>
 
           <Field label="Link do post no Instagram" hint="Cole a URL real, ex.: https://www.instagram.com/p/ABC123/">
@@ -162,7 +162,7 @@ export default function InstagramGallery() {
                       <button onClick={() => toggleActive(post)} disabled={savingId === post.id} className="text-[11px] text-ink-soft underline decoration-dotted hover:text-tag">
                         {post.active ? 'ocultar' : 'reativar'}
                       </button>
-                      <button onClick={() => handleDelete(post)} disabled={savingId === post.id} className="text-[11px] text-ink-soft underline decoration-dotted hover:text-danger">
+                      <button onClick={() => handleDelete(post)} disabled={savingId === post.id} className="text-[11px] text-ink-soft underline decoration-dotted hover:text-danger-bg">
                         excluir
                       </button>
                     </div>

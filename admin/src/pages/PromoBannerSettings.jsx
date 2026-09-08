@@ -5,13 +5,7 @@ import Button from '../components/Button';
 import ImageCropModal from '../components/ImageCropModal';
 import { ErrorNotice, LoadingBlock } from '../components/States';
 
-const emptyForm = { eyebrow: '', title: '', subtitle: '', description: '', imageUrl: '', imageFocalPoint: 'center' };
-
-const FOCAL_OPTIONS = [
-  ['top', 'Topo'],
-  ['center', 'Centro'],
-  ['bottom', 'Base'],
-];
+const emptyForm = { eyebrow: '', title: '', subtitle: '', description: '', imageUrl: '' };
 
 export default function PromoBannerSettings() {
   const [form, setForm] = useState(emptyForm);
@@ -23,6 +17,7 @@ export default function PromoBannerSettings() {
   const [uploadError, setUploadError] = useState('');
   const [cropFile, setCropFile] = useState(null);
   const [cropImageSrc, setCropImageSrc] = useState(null);
+  const [recropping, setRecropping] = useState(false); // true = reajustando a imagem JÁ salva
 
   useEffect(() => {
     if (!cropFile) {
@@ -38,7 +33,7 @@ export default function PromoBannerSettings() {
     api.get('/admin/promo-banner')
       .then((data) => setForm({
         eyebrow: data.eyebrow || '', title: data.title || '', subtitle: data.subtitle || '',
-        description: data.description || '', imageUrl: data.imageUrl || '', imageFocalPoint: data.imageFocalPoint || 'center',
+        description: data.description || '', imageUrl: data.imageUrl || '',
       }))
       .finally(() => setLoading(false));
   }, []);
@@ -48,6 +43,7 @@ export default function PromoBannerSettings() {
     e.target.value = '';
     if (!file) return;
     setUploadError('');
+    setRecropping(false);
     setCropFile(file); // abre o recorte antes de subir — o corte fica de verdade na imagem
   }
 
@@ -106,18 +102,19 @@ export default function PromoBannerSettings() {
 
           <Field label="Imagem de fundo">
             <label className="flex cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-line bg-canvas px-4 py-6 text-center text-xs font-bold uppercase text-ink-soft hover:border-ink">
-              {uploadingImage ? 'Enviando...' : 'Escolher imagem'}
+              {uploadingImage ? 'Enviando...' : form.imageUrl ? 'Trocar imagem' : 'Escolher imagem'}
               <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploadingImage} />
             </label>
-            {uploadError && <p className="mt-1 text-xs text-danger">{uploadError}</p>}
-          </Field>
-
-          <Field label="Enquadramento da imagem" hint="Se a foto ficar cortada, ajuste qual parte fica visível">
-            <select className={inputClass} value={form.imageFocalPoint} onChange={(e) => setForm({ ...form, imageFocalPoint: e.target.value })}>
-              {FOCAL_OPTIONS.map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+            {form.imageUrl && (
+              <button
+                type="button"
+                onClick={() => setRecropping(true)}
+                className="mt-2 font-mono text-xs text-ink-soft underline decoration-dotted hover:text-tag"
+              >
+                ajustar o enquadramento desta imagem
+              </button>
+            )}
+            {uploadError && <p className="mt-1 text-xs text-danger-bg">{uploadError}</p>}
           </Field>
 
           <ErrorNotice message={error} />
@@ -128,11 +125,8 @@ export default function PromoBannerSettings() {
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Pré-visualização</p>
           <div
-            className="relative overflow-hidden rounded-lg bg-cover"
-            style={{
-              backgroundImage: form.imageUrl ? `url(${form.imageUrl})` : 'linear-gradient(135deg, #1f2125, #2b2e34)',
-              backgroundPosition: `center ${form.imageFocalPoint}`,
-            }}
+            className="relative overflow-hidden rounded-lg bg-cover bg-center"
+            style={{ backgroundImage: form.imageUrl ? `url(${form.imageUrl})` : 'linear-gradient(135deg, #1f2125, #2b2e34)' }}
           >
             <div className="flex flex-col gap-3 bg-[rgba(18,20,24,0.75)] px-6 py-8 text-white">
               <div>
@@ -152,6 +146,18 @@ export default function PromoBannerSettings() {
           aspect={2.4}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {recropping && form.imageUrl && (
+        <ImageCropModal
+          imageSrc={form.imageUrl}
+          aspect={2.4}
+          onConfirm={async (croppedFile) => {
+            setRecropping(false);
+            await handleCropConfirm(croppedFile);
+          }}
+          onCancel={() => setRecropping(false)}
         />
       )}
     </div>

@@ -8,6 +8,10 @@ module.exports = (sequelize, DataTypes) => {
     sku: { type: DataTypes.STRING(50), allowNull: false, unique: true },
     stockQuantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'stock_quantity' },
     priceOverride: { type: DataTypes.DECIMAL(10, 2), field: 'price_override' },
+    weightKg: { type: DataTypes.DECIMAL(6, 3), field: 'weight_kg' },
+    heightCm: { type: DataTypes.DECIMAL(6, 2), field: 'height_cm' },
+    widthCm: { type: DataTypes.DECIMAL(6, 2), field: 'width_cm' },
+    lengthCm: { type: DataTypes.DECIMAL(6, 2), field: 'length_cm' },
   }, {
     tableName: 'product_variants',
     underscored: true,

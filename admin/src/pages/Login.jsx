@@ -7,24 +7,81 @@ import { ErrorNotice } from '../components/States';
 import { ApiError } from '../api/client';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, completeTwoFactorLogin } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Quando a conta tem 2FA ativo, o login vira duas etapas: senha primeiro,
+  // depois o código do app autenticador — sem re-pedir a senha na segunda.
+  const [twoFactorToken, setTwoFactorToken] = useState(null);
+  const [code, setCode] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await login(form.email, form.password);
-      navigate('/', { replace: true });
+      const result = await login(form.email, form.password);
+      if (result.requiresTwoFactor) {
+        setTwoFactorToken(result.twoFactorToken);
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível entrar.');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleTwoFactorSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await completeTwoFactorLogin(twoFactorToken, code);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Código inválido.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (twoFactorToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ink px-5">
+        <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow-xl">
+          <p className="font-display text-2xl">DRAVENNX</p>
+          <p className="text-xs uppercase tracking-widest text-ink-soft">Verificação em duas etapas</p>
+
+          <form onSubmit={handleTwoFactorSubmit} className="mt-8 space-y-4">
+            <Field label="Código do app autenticador" hint="Ou um código de backup, se você perdeu acesso ao app">
+              <input
+                required autoFocus inputMode="text" maxLength={9}
+                className={`${inputClass} text-center font-mono text-lg tracking-widest`}
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </Field>
+            <ErrorNotice message={error} />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Verificando...' : 'Confirmar'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => { setTwoFactorToken(null); setCode(''); setError(''); }}
+              className="w-full text-center text-xs text-ink-soft underline decoration-dotted hover:text-tag"
+            >
+              Voltar
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
   return (

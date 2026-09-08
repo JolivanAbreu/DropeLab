@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
+import SizeGuide from './pages/SizeGuide';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/produtos" element={<Catalog />} />
           <Route path="/produtos/:slug" element={<ProductDetail />} />
+          <Route path="/guia-de-medidas" element={<SizeGuide />} />
           <Route path="/carrinho" element={<Cart />} />
           <Route path="/entrar" element={<Login />} />
           <Route path="/criar-conta" element={<Register />} />

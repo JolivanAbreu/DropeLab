@@ -10,12 +10,6 @@ const SLOT_LABELS = {
   destaque: 'Fileira de destaques',
 };
 
-const FOCAL_OPTIONS = [
-  ['top', 'Topo'],
-  ['center', 'Centro'],
-  ['bottom', 'Base'],
-];
-
 /**
  * Visão central de "onde cada produto aparece na home" — complementa (não
  * substitui) o campo já existente dentro do formulário de cada produto:
@@ -94,7 +88,7 @@ export default function FeaturedManagement() {
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-soft">
                 <th className="px-4 py-3">Produto</th>
                 <th className="px-4 py-3">Aparece em</th>
-                <th className="px-4 py-3">Enquadramento da foto</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -103,7 +97,7 @@ export default function FeaturedManagement() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {product.images?.[0]?.url ? (
-                        <img src={product.images[0].url} alt="" className="h-12 w-10 rounded object-cover" style={{ objectPosition: FOCAL_OPTIONS.find(([v]) => v === product.imageFocalPoint) ? `center ${product.imageFocalPoint}` : 'center' }} />
+                        <img src={product.images[0].url} alt="" className="h-12 w-10 rounded object-cover" />
                       ) : (
                         <div className="h-12 w-10 rounded bg-canvas-alt" />
                       )}
@@ -122,17 +116,10 @@ export default function FeaturedManagement() {
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3">
-                    <select
-                      className="rounded border border-line bg-white px-2 py-1.5 text-xs"
-                      value={product.imageFocalPoint || 'center'}
-                      disabled={savingId === product.id}
-                      onChange={(e) => updateProduct(product, { imageFocalPoint: e.target.value })}
-                    >
-                      {FOCAL_OPTIONS.map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
+                  <td className="px-4 py-3 text-right">
+                    <Link to={`/produtos/${product.id}`} className="font-mono text-xs text-ink-soft underline decoration-dotted hover:text-tag">
+                      ajustar foto
+                    </Link>
                   </td>
                 </tr>
               ))}

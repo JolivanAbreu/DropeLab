@@ -221,8 +221,99 @@ export default function Account() {
               </Button>
             </form>
           </section>
+
+          <PrivacySection />
         </div>
       </div>
     </div>
+  );
+}
+
+function PrivacySection() {
+  const { logout } = useAuth();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+
+  const [confirming, setConfirming] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError('');
+    try {
+      const data = await api.get('/account/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meus-dados-dravennx-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : 'Não foi possível exportar seus dados agora.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDelete(e) {
+    e.preventDefault();
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await api.delete('/account', { body: { current_password: deletePassword } });
+      logout();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Não foi possível excluir a conta agora.');
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg bg-white p-4 shadow-[0_4px_15px_rgba(0,0,0,0.05)]">
+      <h2 className="border-b-2 border-ink pb-2 text-xs font-black uppercase tracking-wide text-[#111111]">Privacidade e dados</h2>
+
+      <div className="mt-3">
+        <p className="text-xs text-ink-soft">
+          Baixe uma cópia de tudo que guardamos sobre você — perfil, endereços, pedidos, avaliações e favoritos.
+        </p>
+        <Button variant="secondary" size="sm" className="mt-2.5" onClick={handleExport} disabled={exporting}>
+          {exporting ? 'Preparando...' : 'Baixar meus dados'}
+        </Button>
+        <ErrorNotice message={exportError} />
+      </div>
+
+      <div className="mt-5 rounded-md border border-danger/30 bg-danger/5 p-3.5">
+        <p className="text-xs font-black uppercase text-danger">Excluir minha conta</p>
+        <p className="mt-1 text-xs text-ink-soft">
+          Seus dados pessoais (nome, e-mail, CPF, telefone) são apagados e o login para de funcionar. Pedidos já
+          feitos continuam existindo por exigência fiscal, mas deixam de estar associados a você. Essa ação não
+          pode ser desfeita.
+        </p>
+
+        {!confirming ? (
+          <button onClick={() => setConfirming(true)} className="mt-2.5 font-mono text-xs font-black uppercase text-danger underline decoration-dotted">
+            Quero excluir minha conta
+          </button>
+        ) : (
+          <form onSubmit={handleDelete} className="mt-3 space-y-2.5">
+            <Field label="Confirme sua senha para excluir">
+              <input type="password" required className={inputClass} value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} />
+            </Field>
+            <ErrorNotice message={deleteError} />
+            <div className="flex gap-2.5">
+              <button type="submit" disabled={deleting} className="rounded-md bg-danger px-4 py-2 text-[11px] font-black uppercase tracking-wide text-white hover:opacity-90 disabled:opacity-60">
+                {deleting ? 'Excluindo...' : 'Sim, excluir de vez'}
+              </button>
+              <button type="button" onClick={() => { setConfirming(false); setDeletePassword(''); setDeleteError(''); }} className="rounded-md border border-line px-4 py-2 text-[11px] font-black uppercase tracking-wide text-ink-soft hover:border-ink">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </section>
   );
 }

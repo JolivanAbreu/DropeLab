@@ -24,7 +24,24 @@ const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) throw ApiError.badRequest('Informe e-mail e senha');
 
-  const { user, tokens } = await authService.login({ email, password });
+  const result = await authService.login({ email, password });
+
+  if (result.requiresTwoFactor) {
+    return res.json({ requires_two_factor: true, two_factor_token: result.twoFactorToken });
+  }
+
+  res.json({
+    user: { id: result.user.id, name: result.user.name, email: result.user.email, role: result.user.role },
+    access_token: result.tokens.accessToken,
+    refresh_token: result.tokens.refreshToken,
+  });
+});
+
+const verifyTwoFactorLogin = asyncHandler(async (req, res) => {
+  const { two_factor_token: twoFactorToken, code } = req.body;
+  if (!twoFactorToken || !code) throw ApiError.badRequest('two_factor_token e code são obrigatórios');
+
+  const { user, tokens } = await authService.verifyTwoFactorLogin(twoFactorToken, code);
   res.json({
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
     access_token: tokens.accessToken,
@@ -54,4 +71,4 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.json({ message: 'Senha redefinida com sucesso' });
 });
 
-module.exports = { register, confirmEmail, login, refresh, forgotPassword, resetPassword };
+module.exports = { register, confirmEmail, login, verifyTwoFactorLogin, refresh, forgotPassword, resetPassword };

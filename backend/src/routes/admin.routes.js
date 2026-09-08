@@ -20,7 +20,10 @@ router.get('/admin/products/:id', authenticate, requireRole('admin', 'operator')
 router.post('/admin/products', authenticate, requireRole('admin'), controller.createProduct);
 router.put('/admin/products/:id', authenticate, requireRole('admin'), controller.updateProduct);
 router.delete('/admin/products/:id', authenticate, requireRole('admin'), controller.deactivateProduct);
+router.delete('/admin/products/:id/permanently', authenticate, requireRole('admin'), controller.deleteProductPermanently);
 router.put('/admin/products/:id/reactivate', authenticate, requireRole('admin'), controller.reactivateProduct);
+router.post('/admin/products/bulk-active', authenticate, requireRole('admin'), controller.bulkSetActive);
+router.post('/admin/products/bulk-price', authenticate, requireRole('admin'), controller.bulkAdjustPrice);
 router.put('/admin/variants/:variantId/stock', authenticate, requireRole('admin', 'operator'), controller.adjustStock);
 
 // Upload de imagem de produto — aceita arquivo do computador (multipart),
@@ -64,5 +67,14 @@ router.get('/admin/dashboard/metrics', authenticate, requireRole('admin'), contr
 // Relatórios de vendas — restrito a administrador
 router.get('/admin/reports/sales', authenticate, requireRole('admin'), controller.salesReport);
 router.get('/admin/reports/sales/export', authenticate, requireRole('admin'), controller.salesReportExport);
+
+// Newsletter — leitura liberada pra admin e operador, sem escrita administrativa
+// (assinar é só pelo formulário público)
+router.get('/admin/newsletter', authenticate, requireRole('admin', 'operator'), controller.listNewsletterSubscribers);
+router.get('/admin/newsletter/export', authenticate, requireRole('admin', 'operator'), controller.exportNewsletterSubscribers);
+
+// Log de auditoria — só admin (não operador): é um registro sobre ações
+// administrativas de todo mundo, incluindo dos próprios admins.
+router.get('/admin/audit-logs', authenticate, requireRole('admin'), controller.listAuditLogs);
 
 module.exports = router;

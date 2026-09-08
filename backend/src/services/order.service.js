@@ -82,7 +82,19 @@ async function createOrder(userId, { addressId, shippingOptionId, couponCode }) 
 async function listOrdersForUser(userId) {
   return Order.findAll({
     where: { userId },
-    include: [{ model: OrderItem, as: 'items', include: [{ model: ProductVariant, as: 'variant', include: [{ model: Product, as: 'product' }] }] }],
+    include: [{
+      model: OrderItem,
+      as: 'items',
+      include: [{
+        model: ProductVariant,
+        as: 'variant',
+        include: [{
+          model: Product,
+          as: 'product',
+          include: [{ model: ProductImage, as: 'images', separate: true, limit: 1, order: [['order', 'ASC']] }],
+        }],
+      }],
+    }],
     order: [['createdAt', 'DESC']],
   });
 }

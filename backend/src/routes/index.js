@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const asyncHandler = require('../utils/asyncHandler');
 const promoBannerService = require('../services/promoBanner.service');
+const newsletterService = require('../services/newsletter.service');
 const instagramPostService = require('../services/instagramPost.service');
 
 router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -19,6 +20,12 @@ router.get('/store-info', (req, res) => {
 // topo da home.
 router.get('/promo-banner', asyncHandler(async (req, res) => {
   res.json(await promoBannerService.getPromoBanner());
+}));
+
+// Newsletter — formulário do rodapé, público.
+router.post('/newsletter/subscribe', asyncHandler(async (req, res) => {
+  const subscriber = await newsletterService.subscribe(req.body.email);
+  res.status(201).json({ email: subscriber.email });
 }));
 
 // Galeria curada do Instagram (posts reais, adicionados manualmente pelo

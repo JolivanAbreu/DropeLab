@@ -233,6 +233,10 @@ async function updateProduct(id, payload) {
               sku: variant.sku,
               stockQuantity: variant.stockQuantity,
               priceOverride: variant.priceOverride ?? null,
+              weightKg: variant.weightKg ?? null,
+              heightCm: variant.heightCm ?? null,
+              widthCm: variant.widthCm ?? null,
+              lengthCm: variant.lengthCm ?? null,
             },
             { where: { id: variant.id, productId: id }, transaction }
           );
@@ -265,11 +269,78 @@ async function deactivateProduct(id) {
   await product.update({ active: false });
 }
 
+/**
+ * Exclusão DEFINITIVA — remove o produto de verdade do banco, com variações,
+ * imagens, avaliações e favoritos em cascata. Só é permitida quando o
+ * produto NUNCA apareceu em nenhum pedido: order_items.variant_id tem
+ * RESTRICT no banco de propósito, então tentar excluir um produto já
+ * vendido quebraria o histórico financeiro — em vez de deixar o banco
+ * rejeitar com um erro de constraint, o service checa antes e devolve uma
+ * mensagem clara orientando a usar "desativar" nesse caso.
+ */
+async function deleteProductPermanently(id) {
+  const product = await Product.findByPk(id, { include: [{ model: ProductVariant, as: 'variants' }] });
+  if (!product) throw ApiError.notFound('Produto não encontrado');
+
+  const variantIds = (product.variants || []).map((v) => v.id);
+  if (variantIds.length > 0) {
+    const orderItemCount = await sequelize.models.OrderItem.count({ where: { variantId: variantIds } });
+    if (orderItemCount > 0) {
+      throw ApiError.conflict(
+        'Este produto já foi vendido — excluir apagaria o histórico de pedidos que o contêm. Use "desativar" para tirá-lo da loja sem perder esse histórico.',
+        'product_has_orders'
+      );
+    }
+  }
+
+  await product.destroy(); // cascade remove variações, imagens, avaliações e favoritos (ver migrations)
+}
+
 async function reactivateProduct(id) {
   const product = await Product.findByPk(id);
   if (!product) throw ApiError.notFound('Produto não encontrado');
   await product.update({ active: true });
   return product;
+}
+
+/**
+ * Ativa/desativa vários produtos de uma vez — mesma exclusão lógica de
+ * deactivateProduct/reactivateProduct, só que em lote. IDs que não existem
+ * são silenciosamente ignorados (não é erro pedir pra ativar um produto que
+ * já foi excluído de outro jeito entre a seleção e o clique); o retorno diz
+ * quantos foram realmente afetados, pra a tela poder avisar se algo ficou
+ * de fora.
+ */
+async function bulkSetActive(ids, active) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw ApiError.badRequest('Informe ao menos um id de produto');
+  }
+  const [affectedCount] = await Product.update({ active }, { where: { id: ids } });
+  return { requested: ids.length, updated: affectedCount };
+}
+
+/**
+ * Reajusta o preço-base de vários produtos de uma vez, por percentual
+ * (positivo = aumento, negativo = redução). Não altera priceOverride de
+ * variações individuais — só o preço-base do produto.
+ */
+async function bulkAdjustPrice(ids, percentage) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw ApiError.badRequest('Informe ao menos um id de produto');
+  }
+  if (typeof percentage !== 'number' || Number.isNaN(percentage)) {
+    throw ApiError.badRequest('percentage precisa ser um número');
+  }
+  if (percentage <= -100) {
+    throw ApiError.badRequest('O percentual de redução não pode ser -100% ou menor (preço ficaria zero ou negativo)');
+  }
+
+  const multiplier = 1 + percentage / 100;
+  const [affectedCount] = await Product.update(
+    { basePrice: sequelize.literal(`ROUND((base_price * ${multiplier})::numeric, 2)`) },
+    { where: { id: ids } }
+  );
+  return { requested: ids.length, updated: affectedCount };
 }
 
 module.exports = {
@@ -280,7 +351,10 @@ module.exports = {
   createProduct,
   updateProduct,
   deactivateProduct,
+  deleteProductPermanently,
   reactivateProduct,
+  bulkSetActive,
+  bulkAdjustPrice,
   listProductsForAdmin,
   getProductForAdmin,
   listFeaturedProducts,

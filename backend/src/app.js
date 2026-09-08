@@ -5,7 +5,10 @@ const morgan = require('morgan');
 const path = require('path');
 
 const routes = require('./routes');
+const monitoring = require('./integrations/monitoring');
 const { notFoundHandler, errorHandler } = require('./middlewares/errorHandler');
+
+monitoring.initMonitoring();
 
 const app = express();
 
@@ -31,6 +34,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 app.use('/v1', routes);
+
+// Precisa vir depois das rotas (senão não há nada pra capturar) e antes do
+// errorHandler final da aplicação (senão o Sentry nunca vê a exceção, já
+// convertida em resposta JSON). Vira no-op se SENTRY_DSN não configurado.
+monitoring.attachExpressErrorHandler(app);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -11,7 +11,7 @@ let tempIdCounter = 0;
 const nextTempId = () => `temp-${++tempIdCounter}`;
 const isTemp = (tempId) => String(tempId).startsWith('temp-');
 
-const emptyVariant = () => ({ tempId: nextTempId(), size: 'M', color: '', sku: '', stockQuantity: 0, priceOverride: '' });
+const emptyVariant = () => ({ tempId: nextTempId(), size: 'M', color: '', sku: '', stockQuantity: 0, priceOverride: '', weightKg: '', heightCm: '', widthCm: '', lengthCm: '' });
 const emptyImage = () => ({ tempId: nextTempId(), url: '' });
 
 function StockAdjuster({ variant, onAdjusted }) {
@@ -59,7 +59,7 @@ function StockAdjuster({ variant, onAdjusted }) {
       </Field>
       <Button type="button" size="sm" onClick={apply} disabled={busy}>{busy ? 'Aplicando...' : 'Aplicar'}</Button>
       <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancelar</Button>
-      {error && <span className="w-full text-xs text-danger">{error}</span>}
+      {error && <span className="w-full text-xs text-danger-bg">{error}</span>}
     </div>
   );
 }
@@ -71,7 +71,7 @@ export default function ProductForm() {
 
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
-    categoryId: '', name: '', slug: '', description: '', fabric: '', careInstructions: '', basePrice: '', active: true, featuredSlot: '', badgeLabel: '', imageFocalPoint: 'center',
+    categoryId: '', name: '', slug: '', description: '', fabric: '', careInstructions: '', basePrice: '', active: true, featuredSlot: '', badgeLabel: '',
   });
   const [variants, setVariants] = useState([emptyVariant()]);
   const [images, setImages] = useState([]);
@@ -83,6 +83,7 @@ export default function ProductForm() {
   const [cropQueue, setCropQueue] = useState([]); // File[] aguardando recorte, um de cada vez
   const [cropQueueTotal, setCropQueueTotal] = useState(0); // tamanho do lote original, pra mostrar "1 de 3"
   const [cropImageSrc, setCropImageSrc] = useState(null);
+  const [recropTarget, setRecropTarget] = useState(null); // { tempId, url } — recorte de uma foto JÁ cadastrada
 
   // Gera uma URL temporária pro arquivo no topo da fila de recorte, e
   // libera a anterior da memória quando troca ou quando a fila esvazia.
@@ -112,7 +113,7 @@ export default function ProductForm() {
         careInstructions: data.careInstructions || '',
         basePrice: data.basePrice,
         active: data.active,
-        featuredSlot: data.featuredSlot || '', imageFocalPoint: data.imageFocalPoint || 'center',
+        featuredSlot: data.featuredSlot || '',
         badgeLabel: data.badgeLabel || '',
       });
       setVariants(data.variants.length ? data.variants.map((v) => ({ ...v, tempId: v.id })) : [emptyVariant()]);
@@ -175,6 +176,27 @@ export default function ProductForm() {
     setCropQueue((prev) => prev.slice(1));
   }
 
+  /**
+   * Reabre o recorte pra uma foto JÁ cadastrada (mesmo já tendo sido salva
+   * antes) — funciona tanto pra imagem enviada nesta sessão quanto pra uma
+   * de um produto que já existia. Sobe a nova versão recortada como um
+   * arquivo novo e substitui só a URL daquela posição na lista, sem afetar
+   * as outras fotos.
+   */
+  async function handleRecropConfirm(croppedFile) {
+    setUploadingImage(true);
+    setUploadError('');
+    try {
+      const result = await uploadFile('/admin/uploads', croppedFile);
+      updateImage(recropTarget.tempId, { url: result.url });
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Não foi possível salvar o novo recorte.');
+    } finally {
+      setUploadingImage(false);
+      setRecropTarget(null);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -206,6 +228,10 @@ export default function ProductForm() {
         sku: v.sku,
         stockQuantity: Number(v.stockQuantity),
         priceOverride: v.priceOverride ? Number(v.priceOverride) : null,
+        weightKg: v.weightKg ? Number(v.weightKg) : null,
+        heightCm: v.heightCm ? Number(v.heightCm) : null,
+        widthCm: v.widthCm ? Number(v.widthCm) : null,
+        lengthCm: v.lengthCm ? Number(v.lengthCm) : null,
       })),
       images: images.filter((img) => img.url).map((img, idx) => ({ url: img.url, order: idx })),
     };
@@ -283,13 +309,6 @@ export default function ProductForm() {
             <Field label="Rótulo de destaque no card (opcional)" hint='Texto livre, ex.: "LANÇAMENTO" ou "BESTSELLER" — não é desconto calculado'>
               <input className={inputClass} maxLength={30} placeholder="Ex.: LANÇAMENTO" value={form.badgeLabel} onChange={(e) => setForm({ ...form, badgeLabel: e.target.value.toUpperCase() })} />
             </Field>
-            <Field label="Enquadramento da foto" hint="Se a foto ficar cortada no card/banner, ajuste qual parte fica visível">
-              <select className={inputClass} value={form.imageFocalPoint} onChange={(e) => setForm({ ...form, imageFocalPoint: e.target.value })}>
-                <option value="top">Topo</option>
-                <option value="center">Centro</option>
-                <option value="bottom">Base</option>
-              </select>
-            </Field>
           </div>
         </section>
 
@@ -311,9 +330,20 @@ export default function ProductForm() {
                 <input className={`${inputClass} col-span-3`} placeholder="SKU" value={v.sku} onChange={(e) => updateVariant(v.tempId, { sku: e.target.value })} />
                 <input type="number" min="0" className={`${inputClass} col-span-2`} placeholder="Estoque" value={v.stockQuantity} onChange={(e) => updateVariant(v.tempId, { stockQuantity: e.target.value })} />
                 <input type="number" step="0.01" min="0" className={`${inputClass} col-span-2`} placeholder="Preço específico" value={v.priceOverride || ''} onChange={(e) => updateVariant(v.tempId, { priceOverride: e.target.value })} />
-                <button type="button" onClick={() => removeVariant(v.tempId)} className="col-span-1 text-xs text-ink-soft hover:text-danger">
+                <button type="button" onClick={() => removeVariant(v.tempId)} className="col-span-1 text-xs text-ink-soft hover:text-danger-bg">
                   remover
                 </button>
+
+                <div className="col-span-12 grid grid-cols-4 gap-2">
+                  <input type="number" step="0.01" min="0" className={inputClass} placeholder="Peso (kg)" value={v.weightKg || ''} onChange={(e) => updateVariant(v.tempId, { weightKg: e.target.value })} />
+                  <input type="number" step="0.1" min="0" className={inputClass} placeholder="Altura (cm)" value={v.heightCm || ''} onChange={(e) => updateVariant(v.tempId, { heightCm: e.target.value })} />
+                  <input type="number" step="0.1" min="0" className={inputClass} placeholder="Largura (cm)" value={v.widthCm || ''} onChange={(e) => updateVariant(v.tempId, { widthCm: e.target.value })} />
+                  <input type="number" step="0.1" min="0" className={inputClass} placeholder="Comprimento (cm)" value={v.lengthCm || ''} onChange={(e) => updateVariant(v.tempId, { lengthCm: e.target.value })} />
+                </div>
+                <p className="col-span-12 text-[11px] text-ink-soft">
+                  Peso e dimensões da embalagem — usados pra calcular o frete real por CEP. Sem preencher, o sistema usa uma estimativa padrão de camiseta dobrada.
+                </p>
+
                 {!isTemp(v.tempId) && (
                   <div className="col-span-12">
                     <StockAdjuster variant={v} onAdjusted={(newQty) => updateVariant(v.tempId, { stockQuantity: newQty })} />
@@ -349,7 +379,11 @@ export default function ProductForm() {
               </Button>
             </div>
           </div>
-          {uploadError && <p className="mt-2 text-xs text-danger">{uploadError}</p>}
+          {uploadError && <p className="mt-2 text-xs text-danger-bg">{uploadError}</p>}
+          <p className="mt-2 text-xs text-ink-soft">
+            Toda foto nova passa por um recorte manual (arrastar + zoom) antes de subir. Já tem uma foto cadastrada
+            e o enquadramento ficou ruim? Clique em "recortar" ao lado dela pra ajustar sem precisar reenviar.
+          </p>
           <div className="mt-4 space-y-2">
             {images.map((img) => (
               <div key={img.tempId} className="flex items-center gap-2">
@@ -357,7 +391,12 @@ export default function ProductForm() {
                   <img src={img.url} alt="" className="h-10 w-10 shrink-0 rounded object-cover" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
                 )}
                 <input className={inputClass} placeholder="https://..." value={img.url} onChange={(e) => updateImage(img.tempId, { url: e.target.value })} />
-                <button type="button" onClick={() => removeImage(img.tempId)} className="shrink-0 text-xs text-ink-soft hover:text-danger">remover</button>
+                {img.url && (
+                  <button type="button" onClick={() => setRecropTarget({ tempId: img.tempId, url: img.url })} className="shrink-0 font-mono text-xs text-ink-soft hover:text-tag">
+                    recortar
+                  </button>
+                )}
+                <button type="button" onClick={() => removeImage(img.tempId)} className="shrink-0 text-xs text-ink-soft hover:text-danger-bg">remover</button>
               </div>
             ))}
             {images.length === 0 && <p className="text-xs text-ink-soft">Nenhuma imagem cadastrada — a loja usa uma ilustração padrão nesse caso.</p>}
@@ -372,6 +411,8 @@ export default function ProductForm() {
         </div>
       </form>
 
+      {isEditing && <DangerZone productId={id} navigate={navigate} />}
+
       {cropImageSrc && (
         <ImageCropModal
           imageSrc={cropImageSrc}
@@ -381,6 +422,69 @@ export default function ProductForm() {
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}
         />
+      )}
+
+      {recropTarget && (
+        <ImageCropModal
+          imageSrc={recropTarget.url}
+          aspect={3 / 4}
+          onConfirm={handleRecropConfirm}
+          onCancel={() => setRecropTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DangerZone({ productId, navigate }) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleDelete() {
+    setError('');
+    setDeleting(true);
+    try {
+      await api.delete(`/admin/products/${productId}/permanently`);
+      navigate('/produtos');
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Não foi possível excluir o produto agora.'
+      );
+      setConfirming(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border-2 border-danger-bg/40 bg-danger-bg/[0.06] p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-danger-bg">Excluir produto definitivamente</p>
+      <p className="mt-1.5 text-xs text-ink">
+        Remove o produto, variações, fotos, avaliações e favoritos de vez do banco de dados — diferente de
+        desativar (que só tira da loja, mantendo tudo salvo). Só funciona se este produto nunca apareceu em
+        nenhum pedido; se já foi vendido, use o campo "Visível na loja" acima para desativar em vez de excluir.
+      </p>
+
+      {!confirming ? (
+        <button onClick={() => setConfirming(true)} className="mt-3 rounded-md border-2 border-danger-bg px-4 py-2 font-mono text-xs font-black uppercase tracking-wide text-danger-bg hover:bg-danger-bg hover:text-white">
+          Quero excluir este produto
+        </button>
+      ) : (
+        <div className="mt-3 space-y-2.5">
+          <ErrorNotice message={error} />
+          <p className="text-xs font-bold text-ink">Tem certeza? Essa ação não pode ser desfeita.</p>
+          <div className="flex gap-2.5">
+            <button onClick={handleDelete} disabled={deleting} className="rounded-md bg-danger-bg px-4 py-2 text-[11px] font-black uppercase tracking-wide text-white hover:opacity-90 disabled:opacity-60">
+              {deleting ? 'Excluindo...' : 'Sim, excluir de vez'}
+            </button>
+            <button onClick={() => { setConfirming(false); setError(''); }} className="rounded-md border border-line px-4 py-2 text-[11px] font-black uppercase tracking-wide text-ink-soft hover:border-ink">
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

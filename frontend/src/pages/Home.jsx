@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import FeaturedBanner from '../components/FeaturedBanner';
 import PromoBanner from '../components/PromoBanner';
@@ -49,9 +50,9 @@ export default function Home() {
       <section className="mt-8 text-center">
         <p className="mb-4 text-xs font-black text-[#222222]">
           Tá com dúvida nas nossas modelagens?{' '}
-          <span className="cursor-default underline decoration-dotted" title="Guia de tamanhos em breve">
+          <Link to="/guia-de-medidas" className="underline decoration-dotted hover:text-tag-dark">
             clique aqui e saiba mais
-          </span>
+          </Link>
         </p>
         <p className="text-[10px] font-black uppercase tracking-[0.15em] text-ink">Modelagem</p>
       </section>

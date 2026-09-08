@@ -52,7 +52,7 @@ function ResetPasswordAction({ user, onDone }) {
   return (
     <div className="rounded-md border border-line bg-canvas p-3 text-xs">
       <p>Gerar uma nova senha temporária para <strong>{user.name}</strong>? A senha atual deixa de funcionar imediatamente.</p>
-      {error && <p className="mt-1 text-danger">{error}</p>}
+      {error && <p className="mt-1 text-danger-bg">{error}</p>}
       <div className="mt-2 flex gap-2">
         <Button size="sm" onClick={confirm} disabled={busy}>{busy ? 'Gerando...' : 'Confirmar'}</Button>
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>

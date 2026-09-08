@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { User } = require('../models');
 const ApiError = require('../utils/apiError');
 const emailService = require('./email.service');
+const twoFactorService = require('./twoFactor.service');
 
 // Tokens de confirmação de e-mail e redefinição de senha guardados em memória
 // para simplificar este exemplo. Em produção, mover para uma tabela dedicada
@@ -19,6 +20,27 @@ function issueTokens(user) {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   });
   return { accessToken, refreshToken };
+}
+
+// Token de curtíssima duração (5 min) usado só pra atravessar a segunda
+// etapa do login (código do 2FA) — não serve pra autenticar nenhuma outra
+// rota da API, só pra provar "esta pessoa acabou de acertar a senha" sem
+// precisar reenviar e-mail/senha de novo na segunda chamada.
+function issueTwoFactorPendingToken(user) {
+  return jwt.sign({ sub: user.id, type: 'two_factor_pending' }, process.env.JWT_SECRET, { expiresIn: '5m' });
+}
+
+function verifyTwoFactorPendingToken(token) {
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    throw ApiError.unauthorized('Sessão de verificação expirada — faça login novamente');
+  }
+  if (payload.type !== 'two_factor_pending') {
+    throw ApiError.unauthorized('Token inválido para esta etapa');
+  }
+  return payload.sub;
 }
 
 async function register({ name, email, password, cpf, phone }) {
@@ -59,9 +81,27 @@ async function confirmEmail(token) {
 async function login({ email, password }) {
   const user = await User.scope('withPassword').findOne({ where: { email } });
   if (!user) throw ApiError.unauthorized('Credenciais inválidas');
+  if (user.deletedAt) throw ApiError.unauthorized('Esta conta foi excluída', 'account_deleted');
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) throw ApiError.unauthorized('Credenciais inválidas');
+
+  if (user.twoFactorEnabled) {
+    return { requiresTwoFactor: true, twoFactorToken: issueTwoFactorPendingToken(user) };
+  }
+
+  return { user, tokens: issueTokens(user) };
+}
+
+async function verifyTwoFactorLogin(twoFactorToken, code) {
+  if (!code) throw ApiError.badRequest('Informe o código de verificação');
+  const userId = verifyTwoFactorPendingToken(twoFactorToken);
+
+  await twoFactorService.verifyLoginCode(userId, code);
+
+  const user = await User.findByPk(userId);
+  if (!user) throw ApiError.unauthorized('Usuário não encontrado');
+  if (user.deletedAt) throw ApiError.unauthorized('Esta conta foi excluída', 'account_deleted');
 
   return { user, tokens: issueTokens(user) };
 }
@@ -75,6 +115,7 @@ async function refresh(refreshToken) {
   }
   const user = await User.findByPk(payload.sub);
   if (!user) throw ApiError.unauthorized('Usuário não encontrado');
+  if (user.deletedAt) throw ApiError.unauthorized('Esta conta foi excluída', 'account_deleted');
   return issueTokens(user);
 }
 
@@ -101,4 +142,4 @@ async function resetPassword(token, newPassword) {
   resetTokens.delete(token);
 }
 
-module.exports = { register, confirmEmail, login, refresh, forgotPassword, resetPassword, issueTokens };
+module.exports = { register, confirmEmail, login, verifyTwoFactorLogin, refresh, forgotPassword, resetPassword, issueTokens };

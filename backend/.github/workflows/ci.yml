@@ -1,0 +1,67 @@
+name: CI — Backend
+
+# Roda a suíte de testes automaticamente a cada push/PR — a mesma suíte que
+# até aqui só era rodada manualmente (npx jest --runInBand) antes de cada
+# entrega. Isso pega regressão automaticamente, sem depender de alguém
+# lembrar de rodar os testes manualmente antes de subir uma mudança.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          # config.js (ambiente "test") sempre lê DB_NAME + sufixo "_test" —
+          # não usa DATABASE_URL (isso é só pra "production"). O nome do
+          # banco criado aqui precisa bater exatamente com esse cálculo.
+          POSTGRES_DB: blusa_oversized_store_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: blusa_oversized_store
+      JWT_SECRET: ci-test-secret
+      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
+      MERCADOPAGO_ACCESS_TOKEN: TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      MERCADOPAGO_PUBLIC_KEY: TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      MERCADOPAGO_WEBHOOK_SECRET: ci-test-webhook-secret
+      FRONTEND_URL: http://localhost:5173
+      ADMIN_URL: http://localhost:5174
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar migrations no banco de teste
+        run: npx sequelize-cli db:migrate
+
+      - name: Rodar suíte de testes
+        run: npx jest --runInBand

@@ -19,6 +19,23 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const data = await api.post('/login', { email, password }, { auth: false });
 
+    if (data.requires_two_factor) {
+      return { requiresTwoFactor: true, twoFactorToken: data.two_factor_token };
+    }
+
+    if (!['admin', 'operator'].includes(data.user.role)) {
+      throw new ApiError(403, 'forbidden', 'Esta conta não tem acesso ao painel administrativo.');
+    }
+
+    setTokens(data);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+    setUser(data.user);
+    return { requiresTwoFactor: false, user: data.user };
+  }, []);
+
+  const completeTwoFactorLogin = useCallback(async (twoFactorToken, code) => {
+    const data = await api.post('/login/2fa', { two_factor_token: twoFactorToken, code }, { auth: false });
+
     if (!['admin', 'operator'].includes(data.user.role)) {
       throw new ApiError(403, 'forbidden', 'Esta conta não tem acesso ao painel administrativo.');
     }
@@ -44,7 +61,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user, isAdmin: user?.role === 'admin', setUser: updateStoredUser }}>
+    <AuthContext.Provider value={{ user, loading, login, completeTwoFactorLogin, logout, isAuthenticated: !!user, isAdmin: user?.role === 'admin', setUser: updateStoredUser }}>
       {children}
     </AuthContext.Provider>
   );

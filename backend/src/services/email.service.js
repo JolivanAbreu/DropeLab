@@ -39,4 +39,25 @@ async function sendOrderStatusUpdate(user, order) {
   });
 }
 
-module.exports = { sendEmailConfirmation, sendPasswordReset, sendOrderStatusUpdate };
+async function sendBackInStockNotification(user, product) {
+  const link = `${FRONTEND_URL}/produtos/${product.slug}`;
+  await sendMail({
+    to: user.email,
+    subject: `Voltou ao estoque: ${product.name} — Dravennx`,
+    html: `<p>Olá, ${user.name}!</p><p>Boas notícias: <strong>${product.name}</strong>, que você favoritou, está disponível de novo.</p><p><a href="${link}">Ver produto</a></p><p>Corre que o estoque costuma ser limitado.</p>`,
+  });
+}
+
+async function sendAbandonedCartReminder(user, cartItems) {
+  const link = `${FRONTEND_URL}/carrinho`;
+  const itemsHtml = cartItems
+    .map((item) => `<li>${item.quantity}x ${item.productName} (${item.size}, ${item.color})</li>`)
+    .join('');
+  await sendMail({
+    to: user.email,
+    subject: 'Você esqueceu uma coisa no carrinho — Dravennx',
+    html: `<p>Olá, ${user.name}!</p><p>Você deixou isso no carrinho:</p><ul>${itemsHtml}</ul><p><a href="${link}">Voltar ao carrinho</a></p><p>O estoque não é garantido — se quiser, finaliza antes que acabe.</p>`,
+  });
+}
+
+module.exports = { sendEmailConfirmation, sendPasswordReset, sendOrderStatusUpdate, sendBackInStockNotification, sendAbandonedCartReminder };

@@ -9,7 +9,10 @@ const adminUserService = require('../services/adminUser.service');
 const categoryService = require('../services/category.service');
 const promoBannerService = require('../services/promoBanner.service');
 const instagramPostService = require('../services/instagramPost.service');
-const { sequelize } = require('../models');
+const newsletterService = require('../services/newsletter.service');
+const storageService = require('../integrations/storage');
+const auditLogService = require('../services/auditLog.service');
+const { sequelize, Coupon, Category } = require('../models');
 
 // --- Usuários ---
 
@@ -22,11 +25,18 @@ const setUserRole = asyncHandler(async (req, res) => {
   const { role } = req.body;
   if (!role) throw ApiError.badRequest('role é obrigatório');
   const user = await adminUserService.setUserRole(req.params.id, role, req.user.id);
+  await auditLogService.logAction({
+    actor: req.user, action: 'user.role_changed', entityType: 'user', entityId: user.id,
+    details: { targetEmail: user.email, newRole: user.role },
+  });
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
 });
 
 const resetUserPassword = asyncHandler(async (req, res) => {
   const result = await adminUserService.resetUserPassword(req.params.id);
+  await auditLogService.logAction({
+    actor: req.user, action: 'user.password_reset', entityType: 'user', entityId: req.params.id,
+  });
   res.json(result);
 });
 
@@ -56,11 +66,41 @@ const updateProduct = asyncHandler(async (req, res) => {
 
 const deactivateProduct = asyncHandler(async (req, res) => {
   await productService.deactivateProduct(req.params.id);
+  await auditLogService.logAction({ actor: req.user, action: 'product.deactivated', entityType: 'product', entityId: req.params.id });
+  res.status(204).send();
+});
+
+const deleteProductPermanently = asyncHandler(async (req, res) => {
+  await productService.deleteProductPermanently(req.params.id);
+  await auditLogService.logAction({ actor: req.user, action: 'product.deleted_permanently', entityType: 'product', entityId: req.params.id });
   res.status(204).send();
 });
 
 const reactivateProduct = asyncHandler(async (req, res) => {
-  res.json(await productService.reactivateProduct(req.params.id));
+  const product = await productService.reactivateProduct(req.params.id);
+  await auditLogService.logAction({ actor: req.user, action: 'product.reactivated', entityType: 'product', entityId: req.params.id });
+  res.json(product);
+});
+
+const bulkSetActive = asyncHandler(async (req, res) => {
+  const { ids, active } = req.body;
+  if (typeof active !== 'boolean') throw ApiError.badRequest('active precisa ser true ou false');
+  const result = await productService.bulkSetActive(ids, active);
+  await auditLogService.logAction({
+    actor: req.user, action: active ? 'product.bulk_activated' : 'product.bulk_deactivated', entityType: 'product',
+    details: { ids, updated: result.updated },
+  });
+  res.json(result);
+});
+
+const bulkAdjustPrice = asyncHandler(async (req, res) => {
+  const { ids, percentage } = req.body;
+  const result = await productService.bulkAdjustPrice(ids, Number(percentage));
+  await auditLogService.logAction({
+    actor: req.user, action: 'product.bulk_price_adjusted', entityType: 'product',
+    details: { ids, percentage: Number(percentage), updated: result.updated },
+  });
+  res.json(result);
 });
 
 const adjustStock = asyncHandler(async (req, res) => {
@@ -84,10 +124,15 @@ const getOrder = asyncHandler(async (req, res) => {
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, trackingCode } = req.body;
   if (!status) throw ApiError.badRequest('status é obrigatório');
-  res.json(await orderService.updateOrderStatus(req.params.id, status, {
+  const order = await orderService.updateOrderStatus(req.params.id, status, {
     trackingCode,
     transitions: orderService.ADMIN_VALID_TRANSITIONS,
-  }));
+  });
+  await auditLogService.logAction({
+    actor: req.user, action: 'order.status_changed', entityType: 'order', entityId: req.params.id,
+    details: { orderNumber: order.orderNumber, newStatus: status, trackingCode: trackingCode || null },
+  });
+  res.json(order);
 });
 
 // --- Cupons ---
@@ -106,7 +151,12 @@ const listCoupons = asyncHandler(async (req, res) => {
 
 const setCouponActive = asyncHandler(async (req, res) => {
   const { active } = req.body;
-  res.json(await couponService.setCouponActive(req.params.id, !!active));
+  const coupon = await couponService.setCouponActive(req.params.id, !!active);
+  await auditLogService.logAction({
+    actor: req.user, action: active ? 'coupon.activated' : 'coupon.deactivated', entityType: 'coupon', entityId: req.params.id,
+    details: { code: coupon.code },
+  });
+  res.json(coupon);
 });
 
 const updateCoupon = asyncHandler(async (req, res) => {
@@ -114,7 +164,12 @@ const updateCoupon = asyncHandler(async (req, res) => {
 });
 
 const deleteCoupon = asyncHandler(async (req, res) => {
+  const coupon = await Coupon.findByPk(req.params.id);
   await couponService.deleteCoupon(req.params.id);
+  await auditLogService.logAction({
+    actor: req.user, action: 'coupon.deleted', entityType: 'coupon', entityId: req.params.id,
+    details: { code: coupon?.code },
+  });
   res.status(204).send();
 });
 
@@ -133,7 +188,12 @@ const updateCategory = asyncHandler(async (req, res) => {
 });
 
 const deleteCategory = asyncHandler(async (req, res) => {
+  const category = await Category.findByPk(req.params.id);
   await categoryService.deleteCategory(req.params.id);
+  await auditLogService.logAction({
+    actor: req.user, action: 'category.deleted', entityType: 'category', entityId: req.params.id,
+    details: { name: category?.name },
+  });
   res.status(204).send();
 });
 
@@ -173,11 +233,17 @@ const deleteInstagramPost = asyncHandler(async (req, res) => {
 const uploadImage = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('Nenhum arquivo enviado', 'no_file');
 
-  // Monta a URL pública a partir da própria requisição — funciona tanto em
-  // desenvolvimento (localhost) quanto em produção, sem depender de
-  // API_PUBLIC_URL estar configurada corretamente.
+  // Monta a URL de fallback (disco local) a partir da própria requisição —
+  // só é usada quando nenhum bucket S3/R2 está configurado (ver
+  // integrations/storage.js). Com o bucket configurado, a URL pública vem
+  // de lá, não daqui.
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const url = `${baseUrl}/uploads/${req.file.filename}`;
+  const { url } = await storageService.saveFile({
+    buffer: req.file.buffer,
+    originalName: req.file.originalname,
+    mimetype: req.file.mimetype,
+    requestBaseUrl: baseUrl,
+  });
   res.status(201).json({ url });
 });
 
@@ -195,6 +261,21 @@ const salesReportExport = asyncHandler(async (req, res) => {
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="relatorio-vendas-${Date.now()}.csv"`);
+  res.send(csv);
+});
+
+// --- Newsletter ---
+
+const listNewsletterSubscribers = asyncHandler(async (req, res) => {
+  res.json(await newsletterService.listSubscribers());
+});
+
+const exportNewsletterSubscribers = asyncHandler(async (req, res) => {
+  const subscribers = await newsletterService.listSubscribers();
+  const csv = newsletterService.subscribersToCsv(subscribers);
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="newsletter-${Date.now()}.csv"`);
   res.send(csv);
 });
 
@@ -236,9 +317,17 @@ const dashboardMetrics = asyncHandler(async (req, res) => {
   });
 });
 
+// --- Log de auditoria ---
+
+const listAuditLogs = asyncHandler(async (req, res) => {
+  const { entityType, action, page } = req.query;
+  res.json(await auditLogService.listAuditLogs({ entityType, action, page }));
+});
+
 module.exports = {
   listUsers, setUserRole, resetUserPassword,
-  listProducts, getProduct, createProduct, updateProduct, deactivateProduct, reactivateProduct, adjustStock,
+  listProducts, getProduct, createProduct, updateProduct, deactivateProduct, deleteProductPermanently, reactivateProduct, adjustStock,
+  bulkSetActive, bulkAdjustPrice,
   uploadImage,
   listOrders, getOrder, updateOrderStatus,
   createCoupon, listCoupons, setCouponActive, updateCoupon, deleteCoupon,
@@ -246,5 +335,7 @@ module.exports = {
   getPromoBanner, updatePromoBanner,
   listInstagramPosts, createInstagramPost, updateInstagramPost, deleteInstagramPost,
   salesReport, salesReportExport,
+  listNewsletterSubscribers, exportNewsletterSubscribers,
+  listAuditLogs,
   dashboardMetrics,
 };

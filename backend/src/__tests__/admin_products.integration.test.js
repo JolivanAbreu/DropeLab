@@ -163,4 +163,41 @@ describe('CRUD administrativo de produtos', () => {
     expect(res.status).toBe(200);
     expect(res.body.stockQuantity).toBe(7);
   });
+
+  it('salva peso e dimensões da variação na criação do produto', async () => {
+    const created = await request(app).post('/v1/admin/products').set('Authorization', `Bearer ${adminToken}`).send({
+      categoryId,
+      name: 'Produto com Dimensões',
+      slug: `produto-dimensoes-${uuidv4()}`,
+      basePrice: 70,
+      variants: [{ size: 'M', color: 'Azul', sku: `SKU-DIM-${uuidv4()}`, stockQuantity: 5, weightKg: 0.4, heightCm: 6, widthCm: 24, lengthCm: 19 }],
+    });
+    expect(created.status).toBe(201);
+    const variant = created.body.variants[0];
+    expect(Number(variant.weightKg)).toBe(0.4);
+    expect(Number(variant.heightCm)).toBe(6);
+    expect(Number(variant.widthCm)).toBe(24);
+    expect(Number(variant.lengthCm)).toBe(19);
+  });
+
+  it('salva peso e dimensões ao EDITAR uma variação já existente (não descarta o campo)', async () => {
+    const created = await request(app).post('/v1/admin/products').set('Authorization', `Bearer ${adminToken}`).send({
+      categoryId,
+      name: 'Produto Editar Dimensões',
+      slug: `produto-editar-dimensoes-${uuidv4()}`,
+      basePrice: 70,
+      variants: [{ size: 'M', color: 'Verde', sku: `SKU-EDITDIM-${uuidv4()}`, stockQuantity: 5 }],
+    });
+    const productId = created.body.id;
+    const variantId = created.body.variants[0].id;
+
+    const updated = await request(app).put(`/v1/admin/products/${productId}`).set('Authorization', `Bearer ${adminToken}`).send({
+      variants: [{ id: variantId, size: 'M', color: 'Verde', sku: created.body.variants[0].sku, stockQuantity: 5, weightKg: 0.5, heightCm: 7, widthCm: 26, lengthCm: 21 }],
+    });
+
+    expect(updated.status).toBe(200);
+    const variant = updated.body.variants[0];
+    expect(Number(variant.weightKg)).toBe(0.5);
+    expect(Number(variant.widthCm)).toBe(26);
+  });
 });

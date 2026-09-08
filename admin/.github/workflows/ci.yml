@@ -1,0 +1,36 @@
+name: CI — Painel Administrativo
+
+# Build, lint e testes automatizados rodam a cada push/PR. Os testes cobrem
+# o menu (seções expansíveis, permissão por perfil), o login (incluindo o
+# fluxo de 2FA em duas etapas), a tela de produtos (seleção múltipla e
+# ações em massa) e o log de auditoria — com Vitest + Testing Library. Não
+# substitui os smoke tests manuais contra o backend real, mas pega
+# regressão de lógica e de UI antes de chegar em produção.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes automatizados
+        run: npm test
+
+      - name: Build de produção
+        run: npm run build
