@@ -117,7 +117,7 @@ describe('Opções de frete (Uberflex, 99Flex, combinar)', () => {
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variant.id, quantity: 1 });
 
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     expect(order.status).toBe(201);
@@ -140,7 +140,7 @@ describe('Opções de frete (Uberflex, 99Flex, combinar)', () => {
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variant.id, quantity: 1 });
 
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-      address_id: addr.body.id, shipping_option_id: 'uberflex',
+      address_id: addr.body.id, shipping_option_id: 'uberflex', payment_method: 'pix',
     });
 
     expect(order.status).toBe(201);
@@ -221,7 +221,7 @@ describe('Detalhe do pedido no painel administrativo', () => {
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${clientToken}`).send({ variant_id: variant.id, quantity: 1 });
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({
-      address_id: addr.body.id, shipping_option_id: 'uberflex',
+      address_id: addr.body.id, shipping_option_id: 'uberflex', payment_method: 'pix',
     });
 
     const adminEmail = `admin-pedido-${Date.now()}@teste.com`;

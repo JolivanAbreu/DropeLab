@@ -6,8 +6,10 @@ import { LoadingBlock, EmptyState } from '../components/States';
 import Button from '../components/Button';
 import { formatPrice, formatDate, STATUS_LABELS, STATUS_COLORS } from '../lib/format';
 
-const IN_PROGRESS = ['aguardando_pagamento', 'pago', 'em_separacao', 'enviado'];
-const DONE = ['entregue', 'cancelado', 'reembolsado'];
+// Pagamento acontece na entrega — "pago" só é alcançado depois de
+// "entregue" (nunca antes), então já é considerado concluído, não "em andamento".
+const IN_PROGRESS = ['aguardando_pagamento', 'em_separacao', 'enviado'];
+const DONE = ['entregue', 'pago', 'cancelado', 'reembolsado'];
 
 export default function Orders() {
   const [orders, setOrders] = useState(null);

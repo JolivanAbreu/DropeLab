@@ -1,15 +1,8 @@
 const request = require('supertest');
 const { v4: uuidv4 } = require('uuid');
 
-jest.mock('../integrations/mercadopago');
-const mercadopago = require('../integrations/mercadopago');
-// Sem isso, o pre-flight de credenciais em payment.service.js barraria o
-// reembolso mockado antes mesmo de chamar refundPayment (ver mesma nota em
-// payment.integration.test.js).
-mercadopago.hasValidCredentials.mockReturnValue(true);
-
 const app = require('../app');
-const { sequelize, Category, Product, ProductVariant, Order, Payment, User } = require('../models');
+const { sequelize, Category, Product, ProductVariant, Order, User } = require('../models');
 
 let variantId;
 
@@ -32,7 +25,7 @@ async function createOrder(token) {
   await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variantId, quantity: 1 });
   const addressId = await createAddress(token);
   const res = await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-    address_id: addressId, shipping_option_id: 'uberflex',
+    address_id: addressId, shipping_option_id: 'uberflex', payment_method: 'pix',
   });
   return res.body;
 }
@@ -149,30 +142,42 @@ describe('Cancelamento e exclusão de pedido pelo cliente', () => {
     expect(res.body.error).toBe('order_not_cancelable');
   });
 
-  it('cancelamento de pedido pago aciona estorno automático', async () => {
-    mercadopago.createPixPayment.mockResolvedValue({
-      id: Date.now(),
-      status: 'pending',
-      point_of_interaction: { transaction_data: { qr_code_base64: 'x', qr_code: 'y' } },
-    });
-    mercadopago.refundPayment.mockResolvedValue({ status: 'refunded' });
-
-    const token = await registerAndLogin(`estorno-${Date.now()}@teste.com`);
+  it('não permite cliente autocancelar pedido já pago (pagamento na entrega já foi recebido — só admin trata isso, como reembolso)', async () => {
+    const token = await registerAndLogin(`nao-cancela-pago-${Date.now()}@teste.com`);
     const order = await createOrder(token);
-    await request(app).post('/v1/payments/pix').set('Authorization', `Bearer ${token}`).send({ order_id: order.id });
-    // Simula a aprovação do pagamento (o que confirmOrderPaid faria de verdade
-    // via webhook/consulta) para exercitar o cenário real de estorno.
-    await Payment.update({ status: 'approved' }, { where: { orderId: order.id } });
     await Order.update({ status: 'pago' }, { where: { id: order.id } });
 
     const res = await request(app).post(`/v1/orders/${order.id}/cancel`).set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(mercadopago.refundPayment).toHaveBeenCalled();
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('order_not_cancelable');
   });
 
-  it('admin confirma pagamento manualmente (aguardando_pagamento -> pago)', async () => {
+  it('cancelamento de pedido pago funciona normalmente (sem estorno online — pagamento foi físico, na entrega)', async () => {
+    const token = await registerAndLogin(`cancela-pago-${Date.now()}@teste.com`);
+    const order = await createOrder(token);
+    await Order.update({ status: 'pago' }, { where: { id: order.id } });
+
+    const adminEmail = `admin-cancela-pago-${Date.now()}@teste.com`;
+    await registerAndLogin(adminEmail);
+    await User.update({ role: 'admin' }, { where: { email: adminEmail } });
+    const adminLogin = await request(app).post('/v1/login').send({ email: adminEmail, password: 'senha1234' });
+
+    // Pedido "pago" só permite ir pra "reembolsado" na máquina de estados —
+    // não existe mais "cancelado" a partir daí, já que o pagamento na
+    // entrega não tem uma cobrança online pra estornar automaticamente.
+    const res = await request(app)
+      .put(`/v1/admin/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${adminLogin.body.access_token}`)
+      .send({ status: 'reembolsado' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('reembolsado');
+  });
+
+  it('admin confirma pagamento manualmente após a entrega (entregue -> pago)', async () => {
     const token = await registerAndLogin(`confirma-manual-${Date.now()}@teste.com`);
     const order = await createOrder(token);
+    await Order.update({ status: 'entregue' }, { where: { id: order.id } });
 
     const adminEmail = `admin-confirma-${Date.now()}@teste.com`;
     await registerAndLogin(adminEmail);
@@ -188,18 +193,9 @@ describe('Cancelamento e exclusão de pedido pelo cliente', () => {
     expect(res.body.status).toBe('pago');
   });
 
-  it('admin reembolsa pedido entregue diretamente, sem passar por cancelado, e o estorno é acionado', async () => {
-    mercadopago.createPixPayment.mockResolvedValue({
-      id: Date.now(),
-      status: 'pending',
-      point_of_interaction: { transaction_data: { qr_code_base64: 'x', qr_code: 'y' } },
-    });
-    mercadopago.refundPayment.mockResolvedValue({ status: 'refunded' });
-
+  it('admin reembolsa pedido entregue diretamente, sem passar por pago (devolução na hora da entrega)', async () => {
     const token = await registerAndLogin(`entrega-reembolso-${Date.now()}@teste.com`);
     const order = await createOrder(token);
-    await request(app).post('/v1/payments/pix').set('Authorization', `Bearer ${token}`).send({ order_id: order.id });
-    await Payment.update({ status: 'approved' }, { where: { orderId: order.id } });
     await Order.update({ status: 'entregue' }, { where: { id: order.id } });
 
     const adminEmail = `admin-entrega-reembolso-${Date.now()}@teste.com`;
@@ -214,6 +210,5 @@ describe('Cancelamento e exclusão de pedido pelo cliente', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('reembolsado');
-    expect(mercadopago.refundPayment).toHaveBeenCalled();
   });
 });

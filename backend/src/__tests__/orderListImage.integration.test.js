@@ -33,7 +33,7 @@ describe('GET /orders — imagem do produto na listagem (tela "Meus Pedidos")', 
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variant.id, quantity: 1 });
     await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     const res = await request(app).get('/v1/orders').set('Authorization', `Bearer ${token}`);
@@ -58,7 +58,7 @@ describe('GET /orders — imagem do produto na listagem (tela "Meus Pedidos")', 
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variant.id, quantity: 1 });
     await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     const res = await request(app).get('/v1/orders').set('Authorization', `Bearer ${token}`);

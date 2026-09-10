@@ -12,6 +12,14 @@ monitoring.initMonitoring();
 
 const app = express();
 
+// Necessário em qualquer hospedagem atrás de proxy reverso (Railway, Vercel,
+// etc.) — sem isso, o Express não confia no cabeçalho X-Forwarded-For que a
+// plataforma envia, e o limitador de tentativas de login (express-rate-limit)
+// trava com erro ao tentar identificar o IP de quem está fazendo a
+// requisição. O valor "1" confia só no primeiro salto de proxy (o da própria
+// plataforma de hospedagem), não em qualquer um — mais seguro que "true".
+app.set('trust proxy', 1);
+
 app.use(helmet({
   // crossOriginResourcePolicy padrão bloquearia o frontend (outra origem) de
   // carregar as imagens de /uploads — liberamos apenas para esse diretório.

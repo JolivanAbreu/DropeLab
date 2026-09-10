@@ -37,12 +37,17 @@ export const ORDER_STATUS_TONE = {
 // Próximo(s) status que o operador pode escolher a partir do atual — espelha
 // Order.VALID_TRANSITIONS do backend (order.service.js) para já filtrar as
 // opções do formulário antes mesmo de chamar a API.
+// Precisa bater exatamente com ADMIN_VALID_TRANSITIONS em
+// backend/src/services/order.service.js — pagamento agora acontece na
+// entrega, então "pago" deixou de ser pré-requisito pra separar/enviar, e
+// passou a poder ser confirmado a qualquer momento do fluxo (a equipe da
+// loja decide quando o valor foi mesmo recebido).
 export const ORDER_NEXT_STATUSES = {
-  aguardando_pagamento: ['pago', 'cancelado'],
-  pago: ['em_separacao', 'enviado', 'entregue', 'cancelado'],
-  em_separacao: ['enviado', 'entregue', 'cancelado'],
-  enviado: ['entregue', 'cancelado'],
-  entregue: ['reembolsado'],
+  aguardando_pagamento: ['em_separacao', 'enviado', 'entregue', 'pago', 'cancelado'],
+  em_separacao: ['enviado', 'entregue', 'pago', 'cancelado'],
+  enviado: ['entregue', 'pago', 'cancelado'],
+  entregue: ['pago', 'reembolsado'],
+  pago: ['reembolsado'],
   cancelado: ['reembolsado'],
   reembolsado: [],
 };

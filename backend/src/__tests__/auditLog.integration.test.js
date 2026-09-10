@@ -94,7 +94,7 @@ describe('Log de auditoria — registro de ações sensíveis', () => {
       street: 'Rua Auditoria', number: '1', neighborhood: 'Centro', city: 'Fortaleza', state: 'CE', zip: '60000-000',
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${clientToken}`).send({ variant_id: variant.id, quantity: 1 });
-    const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({ address_id: addr.body.id, shipping_option_id: 'combinar' });
+    const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({ address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix' });
 
     const { token: adminToken } = await makeUser(`admin-audit-order-${Date.now()}@teste.com`, 'admin');
     await request(app).put(`/v1/admin/orders/${order.body.id}/status`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'cancelado' });

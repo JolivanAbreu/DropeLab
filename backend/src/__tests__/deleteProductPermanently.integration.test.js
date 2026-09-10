@@ -67,7 +67,7 @@ describe('Exclusão definitiva de produto', () => {
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${clientToken}`).send({ variant_id: variant.id, quantity: 1 });
     await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     const { token: adminToken } = await makeUser(`admin-vendido-${Date.now()}@teste.com`, 'admin');

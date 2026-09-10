@@ -18,7 +18,6 @@ import ResetPassword from './pages/ResetPassword';
 import ConfirmEmail from './pages/ConfirmEmail';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
-import ResumePayment from './pages/ResumePayment';
 import Addresses from './pages/Addresses';
 import Favorites from './pages/Favorites';
 import Account from './pages/Account';
@@ -46,7 +45,6 @@ export default function App() {
           <Route path="/minha-conta" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/minha-conta/pedidos" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
           <Route path="/minha-conta/pedidos/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
-          <Route path="/minha-conta/pedidos/:id/pagamento" element={<ProtectedRoute><ResumePayment /></ProtectedRoute>} />
           <Route path="/minha-conta/enderecos" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
           <Route path="/minha-conta/favoritos" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

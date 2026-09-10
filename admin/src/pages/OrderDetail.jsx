@@ -8,6 +8,13 @@ import { ErrorNotice, SuccessNotice, LoadingBlock } from '../components/States';
 import { formatPrice, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_TONE, ORDER_NEXT_STATUSES } from '../lib/format';
 import { buildCustomerWhatsAppLink } from '../lib/whatsapp';
 
+const PAYMENT_METHOD_LABELS = {
+  credit_card: 'Cartão de crédito',
+  debit_card: 'Cartão de débito',
+  cash: 'Dinheiro',
+  pix: 'Pix',
+};
+
 export default function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
@@ -145,17 +152,17 @@ export default function OrderDetail() {
             </p>
           ) : <p className="mt-3 text-sm text-ink-soft">—</p>}
 
-          {order.payments?.length > 0 && (
+          {order.paymentMethod && (
             <>
-              <h2 className="mt-5 text-xs font-semibold uppercase tracking-wide text-ink-soft">Pagamentos</h2>
-              <div className="mt-2 space-y-2">
-                {order.payments.map((p) => (
-                  <div key={p.id} className="flex justify-between text-xs">
-                    <span className="text-ink-soft">{p.method === 'pix' ? 'Pix' : 'Cartão'} · {formatDateTime(p.createdAt)}</span>
-                    <span>{p.status}</span>
-                  </div>
-                ))}
-              </div>
+              <h2 className="mt-5 text-xs font-semibold uppercase tracking-wide text-ink-soft">Pagamento (na entrega)</h2>
+              <p className="mt-2 text-sm">
+                {PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}
+                {order.paymentMethod === 'cash' && (
+                  Number(order.changeFor) > 0
+                    ? <span className="mt-1 block text-xs font-semibold text-tag-dark">Troco pra {formatPrice(order.changeFor)} — levar {formatPrice(Number(order.changeFor) - Number(order.total))} de troco</span>
+                    : <span className="mt-1 block text-xs text-ink-soft">Sem troco</span>
+                )}
+              </p>
             </>
           )}
         </section>

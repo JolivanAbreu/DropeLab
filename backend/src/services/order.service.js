@@ -8,13 +8,25 @@ const shippingIntegration = require('../integrations/shipping');
 const emailService = require('./email.service');
 const { nextOrderNumber } = require('../utils/generateOrderNumber');
 
+const VALID_PAYMENT_METHODS = ['credit_card', 'debit_card', 'cash', 'pix'];
+
 /**
  * Cria um pedido a partir do carrinho atual (RF-18): dentro de uma única
  * transação, valida e reserva o estoque de cada item, calcula os totais e
  * grava o pedido em "aguardando_pagamento". Se qualquer item não tiver
  * estoque suficiente, a transação inteira é revertida (RF-15).
+ *
+ * O pagamento acontece na entrega (não mais online pelo site) — o cliente
+ * só informa aqui COMO pretende pagar, pra o entregador already saber se
+ * precisa levar maquininha ou troco. changeFor só é relevante quando
+ * paymentMethod === 'cash' e o cliente vai precisar de troco; se informado,
+ * precisa ser suficiente pra cobrir o total do pedido.
  */
-async function createOrder(userId, { addressId, shippingOptionId, couponCode }) {
+async function createOrder(userId, { addressId, shippingOptionId, couponCode, paymentMethod, changeFor }) {
+  if (!VALID_PAYMENT_METHODS.includes(paymentMethod)) {
+    throw ApiError.badRequest('Forma de pagamento inválida', 'invalid_payment_method');
+  }
+
   const address = await Address.findOne({ where: { id: addressId, userId } });
   if (!address) throw ApiError.notFound('Endereço não encontrado para este cliente');
 
@@ -33,6 +45,14 @@ async function createOrder(userId, { addressId, shippingOptionId, couponCode }) 
   }
 
   const total = cart.subtotal - discount + shippingOption.price;
+
+  let normalizedChangeFor = null;
+  if (paymentMethod === 'cash' && changeFor !== undefined && changeFor !== null && changeFor !== '') {
+    normalizedChangeFor = Number(changeFor);
+    if (Number.isNaN(normalizedChangeFor) || normalizedChangeFor < total) {
+      throw ApiError.badRequest('O valor informado para troco precisa ser igual ou maior que o total do pedido', 'invalid_change_for');
+    }
+  }
 
   return sequelize.transaction(async (transaction) => {
     // Reserva o estoque item a item — RETURNING/condição atômica no UPDATE
@@ -57,6 +77,8 @@ async function createOrder(userId, { addressId, shippingOptionId, couponCode }) 
       shippingContactMethod: shippingOption.contactMethod || null,
       total,
       couponCode: coupon ? coupon.code : null,
+      paymentMethod,
+      changeFor: normalizedChangeFor,
     }, { transaction });
 
     await OrderItem.bulkCreate(
@@ -148,11 +170,11 @@ function assertValidTransition(currentStatus, nextStatus, transitions = Order.VA
 // pagamento manualmente). Continua bloqueando o que não faz sentido, como
 // pular a confirmação de pagamento ou reabrir um pedido já entregue.
 const ADMIN_VALID_TRANSITIONS = {
-  aguardando_pagamento: ['pago', 'cancelado'],
-  pago: ['em_separacao', 'enviado', 'entregue', 'cancelado'],
-  em_separacao: ['enviado', 'entregue', 'cancelado'],
-  enviado: ['entregue', 'cancelado'],
-  entregue: ['reembolsado'],
+  aguardando_pagamento: ['em_separacao', 'enviado', 'entregue', 'pago', 'cancelado'],
+  em_separacao: ['enviado', 'entregue', 'pago', 'cancelado'],
+  enviado: ['entregue', 'pago', 'cancelado'],
+  entregue: ['pago', 'reembolsado'],
+  pago: ['reembolsado'],
   cancelado: ['reembolsado'],
   reembolsado: [],
 };
@@ -178,7 +200,6 @@ async function updateOrderStatus(orderId, nextStatus, { trackingCode, transition
     }
     // Estoque é reservado já na criação do pedido (aguardando_pagamento), então
     // todo cancelamento libera o estoque — independentemente do status anterior.
-    const wasPaid = ['pago', 'em_separacao'].includes(order.status);
     if (nextStatus === 'cancelado') {
       await releaseOrderStock(order, { transaction });
     }
@@ -200,19 +221,6 @@ async function updateOrderStatus(orderId, nextStatus, { trackingCode, transition
       console.error('[email] falha ao notificar mudança de status do pedido', err.message);
     });
 
-
-    // Estorno automático: dispara tanto no cancelamento de um pedido já pago
-    // quanto na transição direta para "reembolsado" (ex.: devolução após
-    // entrega, sem passar por "cancelado"). Requerido dentro da função para
-    // evitar dependência circular entre os services.
-    const shouldRefund = nextStatus === 'reembolsado' || (nextStatus === 'cancelado' && wasPaid);
-    if (shouldRefund) {
-      const paymentService = require('./payment.service');
-      await paymentService.refundOrderPayment(order.id).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('[pagamento] falha ao acionar estorno automático', err.message);
-      });
-    }
 
     return order;
   });
@@ -257,7 +265,7 @@ async function listAllOrders({ status, search, page = 1 } = {}) {
 // Status a partir dos quais o próprio cliente ainda pode cancelar o pedido —
 // depois de "enviado" o cancelamento passa a exigir contato com o suporte,
 // já que a mercadoria já está a caminho.
-const CUSTOMER_CANCELABLE_STATUSES = ['aguardando_pagamento', 'pago', 'em_separacao'];
+const CUSTOMER_CANCELABLE_STATUSES = ['aguardando_pagamento', 'em_separacao'];
 // Só é seguro apagar de vez pedidos que nunca chegaram a ser pagos — preserva
 // o histórico fiscal de qualquer pedido que teve pagamento aprovado.
 const CUSTOMER_DELETABLE_STATUSES = ['aguardando_pagamento', 'cancelado'];

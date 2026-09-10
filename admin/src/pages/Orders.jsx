@@ -7,6 +7,13 @@ import { inputClass } from '../components/Field';
 import { LoadingBlock, EmptyState } from '../components/States';
 import { formatPrice, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../lib/format';
 
+const PAYMENT_METHOD_LABELS = {
+  credit_card: 'Cartão de crédito',
+  debit_card: 'Cartão de débito',
+  cash: 'Dinheiro',
+  pix: 'Pix',
+};
+
 const STATUS_FILTERS = [
   ['', 'Todos'],
   ['aguardando_pagamento', 'Aguardando pagamento'],
@@ -88,6 +95,7 @@ export default function Orders() {
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Data</th>
                 <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Pagamento</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
@@ -103,6 +111,12 @@ export default function Orders() {
                   </td>
                   <td className="px-4 py-3 text-ink-soft">{formatDateTime(order.createdAt)}</td>
                   <td className="px-4 py-3 font-mono">{formatPrice(order.total)}</td>
+                  <td className="px-4 py-3">
+                    <p>{PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}</p>
+                    {order.paymentMethod === 'cash' && Number(order.changeFor) > 0 && (
+                      <p className="text-xs text-ink-soft">troco: {formatPrice(Number(order.changeFor) - Number(order.total))}</p>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusPill label={ORDER_STATUS_LABELS[order.status]} tone={ORDER_STATUS_TONE[order.status]} />
                   </td>

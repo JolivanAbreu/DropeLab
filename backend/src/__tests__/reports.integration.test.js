@@ -22,7 +22,7 @@ async function createPaidOrder(customerToken) {
   });
   await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${customerToken}`).send({ variant_id: variantId, quantity: 1 });
   const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${customerToken}`).send({
-    address_id: addr.body.id, shipping_option_id: 'uberflex',
+    address_id: addr.body.id, shipping_option_id: 'uberflex', payment_method: 'pix',
   });
   await Order.update({ status: 'pago' }, { where: { id: order.body.id } });
   return order.body;
@@ -62,6 +62,22 @@ describe('Relatório de vendas', () => {
     expect(res.body.summary.totalRevenue).toBeGreaterThanOrEqual(Number(order.total));
     expect(res.body.byStatus.some((s) => s.status === 'pago')).toBe(true);
     expect(res.body.topProducts.some((p) => p.name === 'Produto Relatório')).toBe(true);
+  });
+
+  it('retorna a quebra por forma de pagamento a partir de orders.payment_method (pagamento na entrega, não mais de uma tabela de pagamento online)', async () => {
+    const customerToken = await makeUser(`cliente-relatorio-pagamento-${Date.now()}@teste.com`, 'customer');
+    await createPaidOrder(customerToken); // usa payment_method: 'pix'
+
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await request(app)
+      .get(`/v1/admin/reports/sales?from=${today}&to=${today}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const pixEntry = res.body.byPaymentMethod.find((m) => m.method === 'pix');
+    expect(pixEntry).toBeTruthy();
+    expect(pixEntry.count).toBeGreaterThanOrEqual(1);
+    expect(pixEntry.revenue).toBeGreaterThan(0);
   });
 
   it('rejeita período com data inicial depois da final', async () => {

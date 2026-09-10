@@ -21,7 +21,7 @@ async function createDeliveredOrder(token) {
   });
   await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${token}`).send({ variant_id: variantId, quantity: 1 });
   const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-    address_id: address.body.id, shipping_option_id: 'uberflex',
+    address_id: address.body.id, shipping_option_id: 'uberflex', payment_method: 'pix',
   });
   await Order.update({ status: 'entregue' }, { where: { id: order.body.id } });
   return order.body;

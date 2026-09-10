@@ -44,12 +44,14 @@ async function getSalesReport({ from, to }) {
     ORDER BY count DESC;
   `, { replacements });
 
+  // Pagamento acontece na entrega (não mais online) — a forma de pagamento
+  // já vem escolhida na criação do pedido (orders.payment_method), sem
+  // depender mais de um registro de pagamento aprovado via provedor externo.
   const [byPaymentMethod] = await sequelize.query(`
-    SELECT pay.method, COUNT(DISTINCT pay.order_id) AS count, COALESCE(SUM(pay.amount), 0) AS revenue
-    FROM payments pay
-    JOIN orders o ON o.id = pay.order_id
-    WHERE pay.status = 'approved' AND o.created_at BETWEEN :start AND :end
-    GROUP BY pay.method;
+    SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(total), 0) AS revenue
+    FROM orders
+    WHERE status NOT IN ('cancelado') AND created_at BETWEEN :start AND :end
+    GROUP BY payment_method;
   `, { replacements });
 
   const [byDay] = await sequelize.query(`

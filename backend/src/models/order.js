@@ -24,18 +24,29 @@ module.exports = (sequelize, DataTypes) => {
     trackingCode: { type: DataTypes.STRING(60), field: 'tracking_code' },
     shippedAt: { type: DataTypes.DATE, field: 'shipped_at' },
     deliveredAt: { type: DataTypes.DATE, field: 'delivered_at' },
+    paymentMethod: {
+      type: DataTypes.ENUM('credit_card', 'debit_card', 'cash', 'pix'),
+      allowNull: false,
+      field: 'payment_method',
+    },
+    changeFor: { type: DataTypes.DECIMAL(10, 2), field: 'change_for' },
   }, {
     tableName: 'orders',
     underscored: true,
   });
 
-  // Transições válidas da máquina de estados do pedido (RF-26 / documento de Arquitetura)
+  // Transições válidas da máquina de estados do pedido (RF-26 / documento de
+  // Arquitetura). O pagamento agora acontece na entrega (cartão físico,
+  // dinheiro ou Pix combinado com o entregador) — por isso "pago" deixou de
+  // ser um pré-requisito pra separar/enviar o pedido, e passou a ser a
+  // confirmação de que o valor foi mesmo recebido, registrada depois de
+  // "entregue".
   Order.VALID_TRANSITIONS = {
-    aguardando_pagamento: ['pago', 'cancelado'],
-    pago: ['em_separacao', 'cancelado'],
+    aguardando_pagamento: ['em_separacao', 'cancelado'],
     em_separacao: ['enviado', 'cancelado'],
-    enviado: ['entregue'],
-    entregue: ['reembolsado'],
+    enviado: ['entregue', 'cancelado'],
+    entregue: ['pago', 'reembolsado'],
+    pago: ['reembolsado'],
     cancelado: ['reembolsado'],
     reembolsado: [],
   };

@@ -212,7 +212,7 @@ describe('Criação de pedido com uma cotação real de transportadora', () => {
     });
 
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({
-      address_id: addr.body.id, shipping_option_id: 'me-7',
+      address_id: addr.body.id, shipping_option_id: 'me-7', payment_method: 'pix',
     });
 
     expect(order.status).toBe(201);

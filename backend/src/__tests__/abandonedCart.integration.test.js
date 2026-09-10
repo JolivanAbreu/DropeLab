@@ -159,7 +159,7 @@ describe('Job de carrinho abandonado', () => {
     const addr = await request(app).post('/v1/addresses').set('Authorization', `Bearer ${token}`).send({
       street: 'Rua Comprou', number: '1', neighborhood: 'Centro', city: 'Fortaleza', state: 'CE', zip: '60000-000',
     });
-    await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({ address_id: addr.body.id, shipping_option_id: 'combinar' });
+    await request(app).post('/v1/orders').set('Authorization', `Bearer ${token}`).send({ address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix' });
 
     await sendAbandonedCartReminders();
 

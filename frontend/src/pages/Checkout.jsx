@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CreditCard, Landmark, Banknote, QrCode } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { useCart } from '../context/CartContext';
 import Field, { inputClass } from '../components/Field';
 import Button from '../components/Button';
-import Tag from '../components/Tag';
 import { ErrorNotice, LoadingBlock } from '../components/States';
 import { formatPrice } from '../lib/format';
 import { maskCEP, maskUF } from '../lib/masks';
 import { useCepAutofill } from '../lib/useCepAutofill';
-import PaymentPanel from '../components/PaymentPanel';
+import CashChangeModal from '../components/CashChangeModal';
 
 const STEPS = ['Endereço', 'Frete', 'Pagamento'];
+
+const PAYMENT_METHODS = [
+  { id: 'credit_card', label: 'Cartão de Crédito', icon: CreditCard, hint: 'Na maquininha, na entrega' },
+  { id: 'debit_card', label: 'Cartão de Débito', icon: Landmark, hint: 'Na maquininha, na entrega' },
+  { id: 'cash', label: 'Dinheiro', icon: Banknote, hint: 'Combine o troco agora' },
+  { id: 'pix', label: 'Pix', icon: QrCode, hint: 'Chave enviada na entrega' },
+];
 
 export default function Checkout() {
   const { cart, refresh, coupon } = useCart();
@@ -32,7 +39,12 @@ export default function Checkout() {
   const [couponResult, setCouponResult] = useState(coupon ? { discount: coupon.discount } : null);
   const [couponError, setCouponError] = useState('');
 
-  const [order, setOrder] = useState(null);
+  // Pagamento acontece na entrega — aqui só se escolhe COMO, pro entregador
+  // já saber se precisa levar maquininha ou troco.
+  const [paymentMethod, setPaymentMethod] = useState(null);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [changeFor, setChangeFor] = useState(null);
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -93,27 +105,44 @@ export default function Checkout() {
     }
   }
 
-  async function goToPayment() {
+  function handleSelectPaymentMethod(methodId) {
+    setError('');
+    if (methodId === 'cash') {
+      setShowCashModal(true);
+      return;
+    }
+    setPaymentMethod(methodId);
+    setChangeFor(null);
+  }
+
+  function handleCashConfirm(amount) {
+    setPaymentMethod('cash');
+    setChangeFor(amount); // null quando não precisa de troco
+    setShowCashModal(false);
+  }
+
+  async function handleFinalizeOrder() {
+    if (!paymentMethod) {
+      setError('Escolha uma forma de pagamento.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      const created = await api.post('/orders', {
+      const order = await api.post('/orders', {
         address_id: selectedAddressId,
         shipping_option_id: selectedShipping,
         coupon_code: couponResult ? couponCode : undefined,
+        payment_method: paymentMethod,
+        change_for: changeFor,
       });
-      setOrder(created);
-      setStep(2);
+      refresh();
+      navigate(`/minha-conta/pedidos/${order.id}`, { state: { justCreated: true } });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar o pedido.');
     } finally {
       setLoading(false);
     }
-  }
-
-  function handlePaid() {
-    refresh();
-    navigate(`/minha-conta/pedidos/${order.id}`, { state: { justPaid: true } });
   }
 
   const shippingCost = shippingOptions?.find((o) => o.id === selectedShipping)?.price || 0;
@@ -261,17 +290,51 @@ export default function Checkout() {
                 <ErrorNotice message={error} />
                 <div className="flex gap-3">
                   <Button variant="ghost" onClick={() => setStep(0)}>← Voltar</Button>
-                  <Button variant="tag" size="lg" onClick={goToPayment} disabled={loading || !selectedShipping}>
-                    {loading ? 'Criando pedido...' : 'Continuar para o pagamento →'}
+                  <Button variant="tag" size="lg" onClick={() => setStep(2)} disabled={loading || !selectedShipping}>
+                    Continuar para o pagamento →
                   </Button>
                 </div>
               </div>
             )}
 
-            {step === 2 && order && (
+            {step === 2 && (
               <div className="space-y-6">
-                <Tag variant="lime">pedido {order.orderNumber} criado — aguardando pagamento</Tag>
-                <PaymentPanel order={order} total={total} onPaid={handlePaid} />
+                <div className="rounded-lg border border-line bg-[#fafafa] p-4">
+                  <p className="text-xs text-ink-soft">
+                    O pagamento é feito <strong>na entrega</strong> — escolha aqui só a forma, pra o entregador já ir preparado.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {PAYMENT_METHODS.map(({ id, label, icon: Icon, hint }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleSelectPaymentMethod(id)}
+                      className={`flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-colors ${paymentMethod === id ? 'border-[#111111] bg-canvas' : 'border-line hover:border-ink'}`}
+                    >
+                      <Icon className="h-6 w-6" strokeWidth={1.75} />
+                      <span className="text-xs font-black uppercase text-[#111111]">{label}</span>
+                      <span className="font-mono text-[10px] text-ink-soft">{hint}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {paymentMethod === 'cash' && (
+                  <p className="text-xs font-bold text-tag-dark">
+                    {changeFor ? `Pagamento em dinheiro — troco pra ${formatPrice(changeFor)} (troco: ${formatPrice(changeFor - total)})` : 'Pagamento em dinheiro — sem troco'}
+                    {' · '}
+                    <button type="button" onClick={() => setShowCashModal(true)} className="underline decoration-dotted">alterar</button>
+                  </p>
+                )}
+
+                <ErrorNotice message={error} />
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => setStep(1)}>← Voltar</Button>
+                  <Button variant="tag" size="lg" onClick={handleFinalizeOrder} disabled={loading || !paymentMethod}>
+                    {loading ? 'Finalizando pedido...' : 'Finalizar pedido →'}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -287,6 +350,14 @@ export default function Checkout() {
           </aside>
         </div>
       </div>
+
+      {showCashModal && (
+        <CashChangeModal
+          total={total}
+          onConfirm={handleCashConfirm}
+          onCancel={() => setShowCashModal(false)}
+        />
+      )}
     </div>
   );
 }

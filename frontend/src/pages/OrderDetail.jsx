@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { LoadingBlock, ErrorNotice } from '../components/States';
 import Button from '../components/Button';
@@ -7,15 +7,17 @@ import ProductMedia from '../components/ProductMedia';
 import ShippingArrangementNotice from '../components/ShippingArrangementNotice';
 import { formatPrice, formatDateTime, STATUS_LABELS, STATUS_COLORS } from '../lib/format';
 
-const CANCELABLE = ['aguardando_pagamento', 'pago', 'em_separacao'];
+const CANCELABLE = ['aguardando_pagamento', 'em_separacao'];
 const DELETABLE = ['aguardando_pagamento', 'cancelado'];
 
+// Pagamento acontece na entrega — "Pagamento Confirmado" agora é o ÚLTIMO
+// passo da linha do tempo (depois de entregue), não mais o segundo.
 const TIMELINE_STEPS = [
   { key: 'realizado', label: 'Pedido Realizado', icon: '✓' },
-  { key: 'pago', label: 'Pagamento Aprovado', icon: '💳' },
   { key: 'separacao', label: 'Em Separação', icon: '📦' },
   { key: 'transito', label: 'Em Trânsito', icon: '🚚' },
   { key: 'entregue', label: 'Entregue', icon: '🏠' },
+  { key: 'pago', label: 'Pagamento Confirmado', icon: '💳' },
 ];
 
 // A partir do status real do pedido, decide quantos passos da linha do
@@ -23,15 +25,20 @@ const TIMELINE_STEPS = [
 function timelineProgress(status) {
   const map = {
     aguardando_pagamento: 0,
-    pago: 1,
-    em_separacao: 2,
-    enviado: 3,
-    entregue: 4,
+    em_separacao: 1,
+    enviado: 2,
+    entregue: 3,
+    pago: 4,
   };
   return map[status] ?? 0;
 }
 
-const PAYMENT_METHOD_LABELS = { pix: 'Pix (à vista)', card: 'Cartão de crédito' };
+const PAYMENT_METHOD_LABELS = {
+  credit_card: 'Cartão de crédito (na entrega)',
+  debit_card: 'Cartão de débito (na entrega)',
+  cash: 'Dinheiro (na entrega)',
+  pix: 'Pix (na entrega)',
+};
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -88,7 +95,7 @@ export default function OrderDetail() {
   const canCancel = CANCELABLE.includes(order.status);
   const canDelete = DELETABLE.includes(order.status);
   const progress = timelineProgress(order.status);
-  const lastPayment = order.payments?.[0];
+  const changeAmount = order.changeFor ? Number(order.changeFor) - Number(order.total) : null;
 
   return (
     <div className="mx-auto max-w-7xl px-2.5 py-4 sm:px-4">
@@ -96,9 +103,9 @@ export default function OrderDetail() {
         ← Voltar para Meus Pedidos
       </button>
 
-      {location.state?.justPaid && (
+      {location.state?.justCreated && (
         <div className="mb-5 rounded-lg border border-tag-dark bg-lime px-4 py-3 text-sm font-bold">
-          Pagamento confirmado — obrigado pela compra!
+          Pedido criado — pagamento combinado pra entrega. Obrigado pela compra!
         </div>
       )}
 
@@ -112,12 +119,17 @@ export default function OrderDetail() {
         </span>
       </div>
 
-      {order.status === 'aguardando_pagamento' && (
+      {!isTerminalBad && order.status !== 'pago' && (
         <div className="mt-4 rounded-lg bg-white p-4 shadow-[0_4px_15px_rgba(0,0,0,0.05)]">
-          <p className="text-xs font-bold uppercase text-ink-soft">Este pedido ainda não foi pago</p>
-          <Button as={Link} to={`/minha-conta/pedidos/${id}/pagamento`} variant="tag" size="sm" className="mt-3">
-            Continuar pagamento →
-          </Button>
+          <p className="text-xs font-bold uppercase text-ink-soft">Pagamento combinado pra entrega</p>
+          <p className="mt-2 text-sm text-[#333333]">
+            {PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}
+            {order.paymentMethod === 'cash' && (
+              changeAmount > 0
+                ? ` — troco pra ${formatPrice(order.changeFor)} (troco: ${formatPrice(changeAmount)})`
+                : ' — sem troco'
+            )}
+          </p>
         </div>
       )}
 
@@ -207,10 +219,11 @@ export default function OrderDetail() {
                 <span>Frete{order.shippingMethodName ? ` (${order.shippingMethodName})` : ''}</span>
                 <span>{Number(order.shippingCost) > 0 ? formatPrice(order.shippingCost) : 'grátis'}</span>
               </div>
-              {lastPayment && (
-                <div className="flex justify-between text-[#333333]"><span>Forma de pagamento</span><span>{PAYMENT_METHOD_LABELS[lastPayment.method] || lastPayment.method}</span></div>
+              <div className="flex justify-between text-[#333333]"><span>Forma de pagamento</span><span>{PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}</span></div>
+              {changeAmount > 0 && (
+                <div className="flex justify-between text-[#333333]"><span>Troco pra</span><span>{formatPrice(order.changeFor)}</span></div>
               )}
-              <div className="flex justify-between border-t border-line pt-2 text-sm font-black text-[#111111]"><span>Total {['pago', 'em_separacao', 'enviado', 'entregue'].includes(order.status) ? 'pago' : ''}</span><span>{formatPrice(order.total)}</span></div>
+              <div className="flex justify-between border-t border-line pt-2 text-sm font-black text-[#111111]"><span>Total {order.status === 'pago' ? '(pago)' : ''}</span><span>{formatPrice(order.total)}</span></div>
             </div>
           </div>
         </div>
@@ -229,9 +242,6 @@ export default function OrderDetail() {
               ) : (
                 <div className="rounded-lg border border-danger p-4">
                   <p className="text-sm">Tem certeza que quer cancelar este pedido?</p>
-                  {['pago', 'em_separacao'].includes(order.status) && (
-                    <p className="mt-1 text-xs text-ink-soft">Como o pedido já foi pago, o estorno será solicitado automaticamente.</p>
-                  )}
                   <div className="mt-3 flex gap-3">
                     <Button variant="tag" size="sm" onClick={handleCancel} disabled={busy}>{busy ? 'Cancelando...' : 'Sim, cancelar'}</Button>
                     <Button variant="ghost" size="sm" onClick={() => setConfirmingCancel(false)}>Voltar</Button>

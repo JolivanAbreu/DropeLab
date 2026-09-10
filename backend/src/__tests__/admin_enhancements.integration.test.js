@@ -131,7 +131,7 @@ describe('Busca de pedidos no painel', () => {
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${clientToken}`).send({ variant_id: variant.id, quantity: 1 });
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     const adminToken = await makeUser(`admin-busca-pedido-${Date.now()}@teste.com`, 'admin');
@@ -159,7 +159,7 @@ describe('Busca de pedidos no painel', () => {
     });
     await request(app).post('/v1/cart/items').set('Authorization', `Bearer ${clientToken}`).send({ variant_id: variant.id, quantity: 1 });
     const order = await request(app).post('/v1/orders').set('Authorization', `Bearer ${clientToken}`).send({
-      address_id: addr.body.id, shipping_option_id: 'combinar',
+      address_id: addr.body.id, shipping_option_id: 'combinar', payment_method: 'pix',
     });
 
     const adminToken = await makeUser(`admin-busca-nome-${Date.now()}@teste.com`, 'admin');
