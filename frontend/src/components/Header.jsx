@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useAuthModal } from '../context/AuthModalContext';
-import { UserIcon, StarIcon, BagIcon, BoxIcon } from './HeaderIcons';
+import { UserIcon, StarIcon, BagIcon, BoxIcon, ShirtIcon, AccessoryIcon, LogoutIcon } from './HeaderIcons';
 
 function IconBadge({ count }) {
   if (!count) return null;
@@ -69,13 +69,49 @@ export default function Header() {
           <Link to="/" onClick={closeMenu} className="font-display text-xl">DRAVENNX<span className="text-tag">®</span></Link>
           <button onClick={closeMenu} aria-label="Fechar menu" className="text-white/70 hover:text-white">✕</button>
         </div>
+
+        {/* Usuário logado: só o nome + ícone de logoff (sem texto "Sair").
+            Visitante: convite pra entrar, sem nome nenhum pra mostrar. */}
+        <div className="flex items-center justify-between border-b border-white/10 py-4">
+          {isAuthenticated ? (
+            <>
+              <span className="flex items-center gap-2 font-mono text-sm text-white">
+                <UserIcon className="h-4 w-4 text-tag" /> {user?.name}
+              </span>
+              <button onClick={handleAuthClick} aria-label="Sair da conta" className="text-white/70 hover:text-tag">
+                <LogoutIcon className="h-5 w-5" />
+              </button>
+            </>
+          ) : (
+            <button onClick={handleAuthClick} className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tag">
+              <UserIcon className="h-4 w-4" /> Entrar / Criar conta
+            </button>
+          )}
+        </div>
+
         <nav className="mt-4 flex-1">
-          <Link to="/produtos" onClick={closeMenu} className={mobileNavClass(isVestuarioActive)}>Vestuário</Link>
-          <Link to="/produtos?category=acessorios" onClick={closeMenu} className={mobileNavClass(isAcessoriosActive)}>Acessórios</Link>
-          <Link to="/minha-conta/pedidos" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta/pedidos')}>Meus pedidos</Link>
-          <Link to="/carrinho" onClick={closeMenu} className={mobileNavClass(location.pathname === '/carrinho')}>Minha sacola</Link>
-          <Link to="/minha-conta" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta')}>Meu perfil</Link>
-          <Link to="/minha-conta/favoritos" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta/favoritos')}>Favoritos</Link>
+          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-white/40">Loja</p>
+          <Link to="/produtos" onClick={closeMenu} className={mobileNavClass(isVestuarioActive)}>
+            <span className="flex items-center gap-2.5"><ShirtIcon className="h-4 w-4" /> Vestuário</span>
+          </Link>
+          <Link to="/produtos?category=acessorios" onClick={closeMenu} className={mobileNavClass(isAcessoriosActive)}>
+            <span className="flex items-center gap-2.5"><AccessoryIcon className="h-4 w-4" /> Acessórios</span>
+          </Link>
+
+          <p className="mb-1 mt-5 font-mono text-[11px] uppercase tracking-widest text-white/40">Minha conta</p>
+          <Link to="/minha-conta" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta')}>
+            <span className="flex items-center gap-2.5"><UserIcon className="h-4 w-4" /> Meu perfil</span>
+          </Link>
+          <Link to="/minha-conta/pedidos" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta/pedidos')}>
+            <span className="flex items-center gap-2.5"><BoxIcon className="h-4 w-4" /> Meus pedidos</span>
+          </Link>
+          <Link to="/minha-conta/favoritos" onClick={closeMenu} className={mobileNavClass(location.pathname === '/minha-conta/favoritos')}>
+            <span className="flex items-center gap-2.5"><StarIcon className="h-4 w-4" /> Favoritos</span>
+          </Link>
+          <Link to="/carrinho" onClick={closeMenu} className={mobileNavClass(location.pathname === '/carrinho')}>
+            <span className="flex items-center gap-2.5"><BagIcon className="h-4 w-4" /> Minha sacola</span>
+          </Link>
+
           {isPanelUser && (
             <a
               href={adminPanelUrl}
@@ -87,15 +123,7 @@ export default function Header() {
               Painel administrativo
             </a>
           )}
-          <button onClick={handleAuthClick} className="mt-3 flex w-full items-center justify-between py-3 font-mono text-sm uppercase tracking-widest text-white">
-            {isAuthenticated ? 'Sair' : 'Entrar'}
-          </button>
         </nav>
-        <div className="mt-6 flex justify-around border-t border-white/10 pt-5">
-          <Link to="/minha-conta" onClick={closeMenu} className="text-white/80 hover:text-tag" aria-label="Minha conta"><UserIcon /></Link>
-          <Link to="/minha-conta/favoritos" onClick={closeMenu} className="text-white/80 hover:text-tag" aria-label="Favoritos"><StarIcon /></Link>
-          <Link to="/minha-conta/pedidos" onClick={closeMenu} className="text-white/80 hover:text-tag" aria-label="Meus pedidos"><BoxIcon /></Link>
-        </div>
       </aside>
 
       <header className="sticky top-2.5 z-40 px-2.5 sm:top-[10px] sm:px-4">

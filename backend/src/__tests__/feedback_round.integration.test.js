@@ -37,6 +37,27 @@ describe('Mensagens de erro de cadastro', () => {
     expect(res.body.error).toBe('cpf_already_registered');
     expect(res.body.message).toMatch(/CPF/);
   });
+
+  it('cadastro funciona sem informar CPF (campo removido do formulário de cadastro)', async () => {
+    const res = await request(app).post('/v1/register').send({
+      name: 'Sem CPF', email: `sem-cpf-${Date.now()}@teste.com`, password: 'senha1234', phone: '85999999999',
+    });
+    expect(res.status).toBe(201);
+
+    const user = await User.findByPk(res.body.id);
+    expect(user.cpf).toBeNull();
+  });
+
+  it('dois cadastros sem CPF não conflitam entre si (unique permite múltiplos NULL)', async () => {
+    const res1 = await request(app).post('/v1/register').send({
+      name: 'Sem CPF 1', email: `sem-cpf-1-${Date.now()}@teste.com`, password: 'senha1234', phone: '85999999999',
+    });
+    const res2 = await request(app).post('/v1/register').send({
+      name: 'Sem CPF 2', email: `sem-cpf-2-${Date.now()}@teste.com`, password: 'senha1234', phone: '85999999999',
+    });
+    expect(res1.status).toBe(201);
+    expect(res2.status).toBe(201);
+  });
 });
 
 describe('Troca de e-mail (Conta)', () => {

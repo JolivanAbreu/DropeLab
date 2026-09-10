@@ -77,7 +77,7 @@ export default function ProductCard({ product }) {
               src={img.url}
               alt={`${product.name} — foto ${i + 1}`}
               style={{ objectPosition: focalPointToCss(product.imageFocalPoint) }}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
+              className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
             />
           ))
         ) : (

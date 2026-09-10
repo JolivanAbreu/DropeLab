@@ -54,3 +54,30 @@ export function BoxIcon({ className = 'h-5 w-5' }) {
     </svg>
   );
 }
+
+export function ShirtIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M8 4 4 6.5 6 10l2-1.2V20h8V8.8L18 10l2-3.5L16 4c-.5 1.2-2 2-4 2s-3.5-.8-4-2Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function AccessoryIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M12 3 4 9l8 12 8-12-8-6Z" strokeLinejoin="round" />
+      <path d="M8.5 9h7M9.5 9 12 3l2.5 6M9.5 9 12 21M14.5 9 12 21" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function LogoutIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M9 4H5.5a1.5 1.5 0 0 0-1.5 1.5v13A1.5 1.5 0 0 0 5.5 20H9" strokeLinecap="round" />
+      <path d="M16 16.5 20.5 12 16 7.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20.5 12H10" strokeLinecap="round" />
+    </svg>
+  );
+}

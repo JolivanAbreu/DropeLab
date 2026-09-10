@@ -4,14 +4,14 @@ const authService = require('../services/auth.service');
 
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, cpf, phone } = req.body;
-  if (!name || !email || !password || !cpf) {
-    throw ApiError.badRequest('Campos obrigatórios: name, email, password, cpf');
+  if (!name || !email || !password) {
+    throw ApiError.badRequest('Campos obrigatórios: name, email, password');
   }
   if (password.length < 8) {
     throw ApiError.badRequest('A senha deve ter ao menos 8 caracteres');
   }
 
-  const user = await authService.register({ name, email, password, cpf, phone });
+  const user = await authService.register({ name, email, password, cpf: cpf || null, phone });
   res.status(201).json({ id: user.id, name: user.name, email: user.email });
 });
 

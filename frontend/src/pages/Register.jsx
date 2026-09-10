@@ -5,7 +5,7 @@ import Field, { inputClass } from '../components/Field';
 import Button from '../components/Button';
 import { ErrorNotice } from '../components/States';
 import { ApiError } from '../api/client';
-import { maskCPF, maskPhone } from '../lib/masks';
+import { maskPhone } from '../lib/masks';
 
 export default function Register() {
   const { register } = useAuth();
@@ -13,7 +13,7 @@ export default function Register() {
   const location = useLocation();
   const redirectTo = location.state?.redirectTo || '/';
 
-  const [form, setForm] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -47,14 +47,9 @@ export default function Register() {
         <Field label="E-mail">
           <input type="email" required className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="CPF">
-            <input required inputMode="numeric" placeholder="000.000.000-00" className={inputClass} value={form.cpf} onChange={(e) => setForm({ ...form, cpf: maskCPF(e.target.value) })} />
-          </Field>
-          <Field label="Telefone">
-            <input inputMode="numeric" placeholder="(00) 00000-0000" className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })} />
-          </Field>
-        </div>
+        <Field label="Telefone">
+          <input inputMode="numeric" placeholder="(00) 00000-0000" className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })} />
+        </Field>
         <Field label="Senha" hint="Mínimo de 8 caracteres">
           <input type="password" required className={inputClass} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         </Field>

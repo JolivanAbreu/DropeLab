@@ -6,10 +6,10 @@ import Field, { inputClass } from './Field';
 import Button from './Button';
 import { ErrorNotice } from './States';
 import { ApiError } from '../api/client';
-import { maskCPF, maskPhone } from '../lib/masks';
+import { maskPhone } from '../lib/masks';
 
 const emptyLogin = { email: '', password: '' };
-const emptyRegister = { name: '', email: '', password: '', cpf: '', phone: '' };
+const emptyRegister = { name: '', email: '', password: '', phone: '' };
 
 export default function LoginModal() {
   const { login, register } = useAuth();
@@ -136,14 +136,9 @@ export default function LoginModal() {
             <Field label="E-mail">
               <input type="email" required className={inputClass} value={registerForm.email} onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })} />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="CPF">
-                <input required inputMode="numeric" placeholder="000.000.000-00" className={inputClass} value={registerForm.cpf} onChange={(e) => setRegisterForm({ ...registerForm, cpf: maskCPF(e.target.value) })} />
-              </Field>
-              <Field label="Telefone">
-                <input inputMode="numeric" placeholder="(00) 00000-0000" className={inputClass} value={registerForm.phone} onChange={(e) => setRegisterForm({ ...registerForm, phone: maskPhone(e.target.value) })} />
-              </Field>
-            </div>
+            <Field label="Telefone">
+              <input inputMode="numeric" placeholder="(00) 00000-0000" className={inputClass} value={registerForm.phone} onChange={(e) => setRegisterForm({ ...registerForm, phone: maskPhone(e.target.value) })} />
+            </Field>
             <Field label="Senha" hint="Mínimo de 8 caracteres">
               <input type="password" required minLength={8} className={inputClass} value={registerForm.password} onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })} />
             </Field>
