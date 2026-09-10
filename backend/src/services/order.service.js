@@ -195,7 +195,11 @@ async function updateOrderStatus(orderId, nextStatus, { trackingCode, transition
 
     assertValidTransition(order.status, nextStatus, transitions);
 
-    if (nextStatus === 'enviado' && !trackingCode) {
+    // Código de rastreio só é exigido quando a entrega é por um serviço com
+    // rastreamento de verdade (Correios/Melhor Envio) — Uber Flash, 99 e
+    // "combinar com o vendedor" nunca geram código de rastreio, então
+    // exigir isso travaria o admin pra sempre nesses casos.
+    if (nextStatus === 'enviado' && !order.requiresShippingArrangement && !trackingCode) {
       throw ApiError.badRequest('Código de rastreio é obrigatório para marcar como enviado');
     }
     // Estoque é reservado já na criação do pedido (aguardando_pagamento), então

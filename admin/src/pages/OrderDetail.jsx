@@ -39,7 +39,10 @@ export default function OrderDetail() {
     setError('');
     setSuccess('');
     if (!nextStatus) return;
-    if (nextStatus === 'enviado' && !trackingCode) {
+    // Código de rastreio só é obrigatório pra frete com rastreamento de
+    // verdade (Correios/Melhor Envio) — Uber Flash, 99 e "combinar com o
+    // vendedor" nunca têm código de rastreio, então não travam aqui.
+    if (nextStatus === 'enviado' && !order.requiresShippingArrangement && !trackingCode) {
       setError('Informe o código de rastreio para marcar como enviado.');
       return;
     }
@@ -177,7 +180,12 @@ export default function OrderDetail() {
               {options.map((s) => <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>)}
             </select>
             {nextStatus === 'enviado' && (
-              <input className={`${inputClass} w-56`} placeholder="Código de rastreio" value={trackingCode} onChange={(e) => setTrackingCode(e.target.value)} />
+              <input
+                className={`${inputClass} w-56`}
+                placeholder={order.requiresShippingArrangement ? 'Código de rastreio (opcional)' : 'Código de rastreio'}
+                value={trackingCode}
+                onChange={(e) => setTrackingCode(e.target.value)}
+              />
             )}
             <Button type="submit" disabled={saving || !nextStatus}>{saving ? 'Salvando...' : 'Atualizar'}</Button>
           </form>

@@ -211,4 +211,49 @@ describe('Cancelamento e exclusão de pedido pelo cliente', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('reembolsado');
   });
+
+  it('marca como enviado SEM código de rastreio quando o frete é combinado (Uber Flash/99/combinar não têm rastreio de verdade)', async () => {
+    const token = await registerAndLogin(`enviado-sem-rastreio-${Date.now()}@teste.com`);
+    const order = await createOrder(token); // usa shipping_option_id: 'uberflex' (requiresShippingArrangement: true)
+    await Order.update({ status: 'em_separacao' }, { where: { id: order.id } });
+
+    const adminEmail = `admin-sem-rastreio-${Date.now()}@teste.com`;
+    await registerAndLogin(adminEmail);
+    await User.update({ role: 'admin' }, { where: { email: adminEmail } });
+    const adminLogin = await request(app).post('/v1/login').send({ email: adminEmail, password: 'senha1234' });
+
+    const res = await request(app)
+      .put(`/v1/admin/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${adminLogin.body.access_token}`)
+      .send({ status: 'enviado' }); // sem trackingCode nenhum
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('enviado');
+  });
+
+  it('continua exigindo código de rastreio pra marcar como enviado quando o frete tem rastreamento de verdade', async () => {
+    const token = await registerAndLogin(`enviado-com-rastreio-${Date.now()}@teste.com`);
+    const order = await createOrder(token);
+    // Simula um frete com rastreamento real (ex.: Melhor Envio) — sem
+    // depender de configurar a integração externa só pra este teste.
+    await Order.update({ status: 'em_separacao', requiresShippingArrangement: false }, { where: { id: order.id } });
+
+    const adminEmail = `admin-com-rastreio-${Date.now()}@teste.com`;
+    await registerAndLogin(adminEmail);
+    await User.update({ role: 'admin' }, { where: { email: adminEmail } });
+    const adminLogin = await request(app).post('/v1/login').send({ email: adminEmail, password: 'senha1234' });
+
+    const semRastreio = await request(app)
+      .put(`/v1/admin/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${adminLogin.body.access_token}`)
+      .send({ status: 'enviado' });
+    expect(semRastreio.status).toBe(400);
+
+    const comRastreio = await request(app)
+      .put(`/v1/admin/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${adminLogin.body.access_token}`)
+      .send({ status: 'enviado', trackingCode: 'BR123456789BR' });
+    expect(comRastreio.status).toBe(200);
+    expect(comRastreio.body.trackingCode).toBe('BR123456789BR');
+  });
 });
