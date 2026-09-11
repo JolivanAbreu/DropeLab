@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 import { getCroppedImageBlob } from '../lib/cropImage';
@@ -16,19 +16,28 @@ export default function ImageCropModal({ imageSrc, aspect = 3 / 4, onCancel, onC
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Guarda síncrona contra clique duplo: o estado "saving" só desabilita o
+  // botão no PRÓXIMO render do React, então dois cliques bem rápidos (comum
+  // enquanto a pessoa espera algum retorno visual aparecer) conseguiam
+  // disparar handleConfirm duas vezes antes do disabled=true realmente
+  // travar o botão — resultando em duas imagens enviadas pra uma única
+  // confirmação. Uma ref muda instantaneamente, sem esperar re-render.
+  const confirmingRef = useRef(false);
 
   const onCropComplete = useCallback((_croppedArea, pixels) => {
     setCroppedAreaPixels(pixels);
   }, []);
 
   async function handleConfirm() {
-    if (!croppedAreaPixels) return;
+    if (!croppedAreaPixels || confirmingRef.current) return;
+    confirmingRef.current = true;
     setSaving(true);
     try {
       const file = await getCroppedImageBlob(imageSrc, croppedAreaPixels);
       onConfirm(file);
     } finally {
       setSaving(false);
+      confirmingRef.current = false;
     }
   }
 
