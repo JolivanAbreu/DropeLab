@@ -46,8 +46,9 @@ router.use(require('./account.routes'));
 router.use(require('./product.routes'));
 router.use(require('./cart.routes'));
 router.use(require('./order.routes'));
-// Pagamento acontece na entrega, não mais online pelo site — rotas de
-// processamento de pagamento (cartão/Pix via Mercado Pago) foram removidas.
+// Pix antecipado — só usado quando o frete é por transportadora real
+// (sem entregador pra combinar pagamento na entrega).
+router.use(require('./payment.routes'));
 router.use(require('./address.routes'));
 router.use(require('./wishlist.routes'));
 router.use(require('./admin.routes'));

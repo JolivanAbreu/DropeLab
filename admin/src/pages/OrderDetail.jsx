@@ -13,6 +13,7 @@ const PAYMENT_METHOD_LABELS = {
   debit_card: 'Cartão de débito',
   cash: 'Dinheiro',
   pix: 'Pix',
+  pix_antecipado: 'Pix antecipado (frete por transportadora)',
 };
 
 export default function OrderDetail() {

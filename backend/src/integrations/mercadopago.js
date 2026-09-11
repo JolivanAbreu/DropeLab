@@ -1,17 +1,10 @@
-const { MercadoPagoConfig, Payment } = require('mercadopago');
+// Integração com o Mercado Pago restrita a Pix antecipado — usada
+// exclusivamente quando o frete é por transportadora real (Correios/Melhor
+// Envio), onde não existe entregador físico pra combinar pagamento na
+// entrega. Para Uber Flash/99/combinar, pagamento continua sendo físico,
+// sem nenhuma chamada a este arquivo.
 const crypto = require('crypto');
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
-  options: { timeout: 8000 },
-});
-
-const paymentClient = new Payment(client);
-
-// Mesmo valor de placeholder que vem no .env.example — se o token em uso
-// ainda for esse (ou estiver vazio, ou claramente não preenchido), sabemos
-// de cara que ninguém configurou credenciais reais de sandbox ainda, sem
-// precisar nem tentar a chamada.
 function hasValidCredentials() {
   const token = process.env.MERCADOPAGO_ACCESS_TOKEN || '';
   return !!token && !/^TEST-x+$/i.test(token) && token !== 'TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
@@ -23,104 +16,82 @@ function hasValidCredentials() {
  * conseguiria alcançar o webhook mesmo assim — e enviar uma URL relativa ou
  * inválida faz a própria criação do pagamento falhar ("notification_url
  * attribute must be url valid"). Por isso omitimos o campo nesses casos: o
- * pagamento continua funcionando normalmente, só não dispara webhook — o
- * app já tem um fallback de consulta direta de status (polling) para cobrir
- * exatamente esse cenário.
+ * pagamento ainda funciona normalmente, só depende de consulta de status
+ * (polling) em vez de notificação automática.
  */
 function buildNotificationUrl() {
   const base = process.env.API_PUBLIC_URL || '';
-  if (!base) return undefined;
-  try {
-    const url = new URL(base);
-    const isLocal = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
-    if (isLocal) return undefined;
-    return `${base.replace(/\/$/, '')}/v1/webhooks/mercadopago`;
-  } catch (err) {
-    return undefined; // API_PUBLIC_URL mal formada — melhor omitir do que quebrar o pagamento
-  }
+  if (!base || base.includes('localhost') || base.includes('127.0.0.1')) return undefined;
+  return `${base.replace(/\/$/, '')}/v1/webhooks/mercadopago`;
 }
 
-/**
- * Cria um pagamento com cartão de crédito usando o token gerado no navegador
- * pelo SDK JS do Mercado Pago (Checkout Transparente). Os dados do cartão nunca
- * passam pelo nosso backend — apenas o token.
- */
-async function createCardPayment({ token, installments, transactionAmount, description, payer, externalReference }) {
-  const notificationUrl = buildNotificationUrl();
-  return paymentClient.create({
-    body: {
-      token,
-      installments,
-      transaction_amount: transactionAmount,
-      description,
-      payer,
-      external_reference: externalReference,
-      // idempotência do lado do Mercado Pago
-      ...(notificationUrl ? { notification_url: notificationUrl } : {}),
+async function mpFetch(path, options) {
+  const res = await fetch(`https://api.mercadopago.com${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+      ...(options?.idempotencyKey ? { 'X-Idempotency-Key': options.idempotencyKey } : {}),
+      ...options?.headers,
     },
   });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = body?.message || body?.cause?.[0]?.description || `HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+  return body;
 }
 
 /**
- * Cria uma cobrança Pix. O Mercado Pago retorna o QR Code (base64) e o código
- * "copia e cola" prontos para exibição no frontend.
+ * Cria uma cobrança Pix (RF-21-antecipado). O CPF do pagador é obrigatório
+ * na prática para o mercado brasileiro — sem ele, o motor de regras
+ * antifraude do Mercado Pago rejeita a transação com "excludes_by_rule",
+ * mesmo em sandbox com dados corretos em todo o resto.
  */
-async function createPixPayment({ transactionAmount, description, payer, externalReference }) {
-  const notificationUrl = buildNotificationUrl();
-  return paymentClient.create({
-    body: {
+async function createPixPayment({ transactionAmount, description, payer, externalReference, idempotencyKey }) {
+  return mpFetch('/v1/payments', {
+    method: 'POST',
+    idempotencyKey,
+    body: JSON.stringify({
       transaction_amount: transactionAmount,
       description,
       payment_method_id: 'pix',
       payer,
       external_reference: externalReference,
-      ...(notificationUrl ? { notification_url: notificationUrl } : {}),
-    },
+      notification_url: buildNotificationUrl(),
+    }),
   });
 }
 
 async function getPayment(paymentId) {
-  return paymentClient.get({ id: paymentId });
-}
-
-async function refundPayment(paymentId) {
-  return paymentClient.refund({ id: paymentId });
+  return mpFetch(`/v1/payments/${paymentId}`, { method: 'GET' });
 }
 
 /**
- * Valida a assinatura enviada pelo Mercado Pago no header x-signature,
- * conforme documentação oficial de webhooks (RNF-08). Nunca processar um
- * webhook sem essa validação.
+ * Valida a assinatura do webhook (x-signature) — nunca confia num payload
+ * de webhook sem confirmar que veio mesmo do Mercado Pago, já que o
+ * endpoint é público por necessidade (o Mercado Pago precisa alcançá-lo
+ * sem autenticação prévia).
  */
 function isValidWebhookSignature({ xSignature, xRequestId, dataId }) {
-  if (!xSignature || !xRequestId) return false;
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  if (!secret || !xSignature) return false;
 
   const parts = Object.fromEntries(
-    xSignature.split(',').map((p) => p.trim().split('=').map((s) => s.trim()))
+    xSignature.split(',').map((p) => p.trim().split('=')).filter((p) => p.length === 2)
   );
   const { ts, v1 } = parts;
   if (!ts || !v1) return false;
 
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-  const hmac = crypto
-    .createHmac('sha256', process.env.MERCADOPAGO_WEBHOOK_SECRET)
-    .update(manifest)
-    .digest('hex');
+  const manifest = `id:${dataId};request-id:${xRequestId || ''};ts:${ts};`;
+  const expected = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
 
-  const expected = Buffer.from(hmac);
-  const received = Buffer.from(v1);
-  // timingSafeEqual exige buffers do mesmo tamanho — um v1 malformado/adulterado
-  // não deve derrubar a requisição, apenas ser tratado como assinatura inválida.
-  if (expected.length !== received.length) return false;
-
-  return crypto.timingSafeEqual(expected, received);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+  } catch {
+    return false; // tamanhos diferentes — nunca é uma assinatura válida
+  }
 }
 
-module.exports = {
-  hasValidCredentials,
-  createCardPayment,
-  createPixPayment,
-  getPayment,
-  refundPayment,
-  isValidWebhookSignature,
-};
+module.exports = { hasValidCredentials, createPixPayment, getPayment, isValidWebhookSignature };

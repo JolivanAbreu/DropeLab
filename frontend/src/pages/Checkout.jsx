@@ -10,6 +10,7 @@ import { formatPrice } from '../lib/format';
 import { maskCEP, maskUF } from '../lib/masks';
 import { useCepAutofill } from '../lib/useCepAutofill';
 import CashChangeModal from '../components/CashChangeModal';
+import PixCheckoutPanel from '../components/PixCheckoutPanel';
 
 const STEPS = ['Endereço', 'Frete', 'Pagamento'];
 
@@ -47,6 +48,10 @@ export default function Checkout() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Quando o frete é por transportadora real (sem entregador pra combinar
+  // pagamento), o pedido é criado normalmente e essa tela passa a mostrar o
+  // QR Code Pix em vez de navegar direto pro detalhe do pedido.
+  const [createdOrderId, setCreatedOrderId] = useState(null);
 
   useEffect(() => {
     api.get('/addresses').then((data) => {
@@ -121,8 +126,12 @@ export default function Checkout() {
     setShowCashModal(false);
   }
 
+  const selectedShippingOption = shippingOptions?.find((o) => o.id === selectedShipping);
+  const requiresPixAntecipado = selectedShippingOption ? !selectedShippingOption.requiresArrangement : false;
+
   async function handleFinalizeOrder() {
-    if (!paymentMethod) {
+    const finalPaymentMethod = requiresPixAntecipado ? 'pix_antecipado' : paymentMethod;
+    if (!finalPaymentMethod) {
       setError('Escolha uma forma de pagamento.');
       return;
     }
@@ -133,11 +142,15 @@ export default function Checkout() {
         address_id: selectedAddressId,
         shipping_option_id: selectedShipping,
         coupon_code: couponResult ? couponCode : undefined,
-        payment_method: paymentMethod,
+        payment_method: finalPaymentMethod,
         change_for: changeFor,
       });
       refresh();
-      navigate(`/minha-conta/pedidos/${order.id}`, { state: { justCreated: true } });
+      if (finalPaymentMethod === 'pix_antecipado') {
+        setCreatedOrderId(order.id);
+      } else {
+        navigate(`/minha-conta/pedidos/${order.id}`, { state: { justCreated: true } });
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar o pedido.');
     } finally {
@@ -297,28 +310,40 @@ export default function Checkout() {
               </div>
             )}
 
-            {step === 2 && (
+            {step === 2 && !createdOrderId && (
               <div className="space-y-6">
-                <div className="rounded-lg border border-line bg-[#fafafa] p-4">
-                  <p className="text-xs text-ink-soft">
-                    O pagamento é feito <strong>na entrega</strong> — escolha aqui só a forma, pra o entregador já ir preparado.
-                  </p>
-                </div>
+                {requiresPixAntecipado ? (
+                  <div className="rounded-lg border border-line bg-[#fafafa] p-4">
+                    <p className="text-xs text-ink-soft">
+                      Este pedido vai por <strong>{selectedShippingOption?.name}</strong> — como não tem entregador pra
+                      combinar pagamento, o Pix precisa ser pago antes do envio. Depois de finalizar, um QR Code aparece
+                      aqui pra pagar.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-lg border border-line bg-[#fafafa] p-4">
+                      <p className="text-xs text-ink-soft">
+                        O pagamento é feito <strong>na entrega</strong> — escolha aqui só a forma, pra o entregador já ir preparado.
+                      </p>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  {PAYMENT_METHODS.map(({ id, label, icon: Icon, hint }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => handleSelectPaymentMethod(id)}
-                      className={`flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-colors ${paymentMethod === id ? 'border-[#111111] bg-canvas' : 'border-line hover:border-ink'}`}
-                    >
-                      <Icon className="h-6 w-6" strokeWidth={1.75} />
-                      <span className="text-xs font-black uppercase text-[#111111]">{label}</span>
-                      <span className="font-mono text-[10px] text-ink-soft">{hint}</span>
-                    </button>
-                  ))}
-                </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {PAYMENT_METHODS.map(({ id, label, icon: Icon, hint }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => handleSelectPaymentMethod(id)}
+                          className={`flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-colors ${paymentMethod === id ? 'border-[#111111] bg-canvas' : 'border-line hover:border-ink'}`}
+                        >
+                          <Icon className="h-6 w-6" strokeWidth={1.75} />
+                          <span className="text-xs font-black uppercase text-[#111111]">{label}</span>
+                          <span className="font-mono text-[10px] text-ink-soft">{hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
 
                 {paymentMethod === 'cash' && (
                   <p className="text-xs font-bold text-tag-dark">
@@ -331,11 +356,19 @@ export default function Checkout() {
                 <ErrorNotice message={error} />
                 <div className="flex gap-3">
                   <Button variant="ghost" onClick={() => setStep(1)}>← Voltar</Button>
-                  <Button variant="tag" size="lg" onClick={handleFinalizeOrder} disabled={loading || !paymentMethod}>
+                  <Button variant="tag" size="lg" onClick={handleFinalizeOrder} disabled={loading || (!requiresPixAntecipado && !paymentMethod)}>
                     {loading ? 'Finalizando pedido...' : 'Finalizar pedido →'}
                   </Button>
                 </div>
               </div>
+            )}
+
+            {step === 2 && createdOrderId && (
+              <PixCheckoutPanel
+                orderId={createdOrderId}
+                total={total}
+                onConfirmed={() => navigate(`/minha-conta/pedidos/${createdOrderId}`, { state: { justCreated: true } })}
+              />
             )}
           </div>
 

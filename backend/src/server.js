@@ -3,8 +3,28 @@ require('dotenv').config();
 const app = require('./app');
 const { sequelize } = require('./models');
 const { scheduleAbandonedCartJob } = require('./jobs/abandonedCart');
+const { scheduleExpireUnpaidPixChargesJob } = require('./jobs/expireUnpaidPixCharges');
 
 const PORT = process.env.PORT || 3000;
+
+// Detecta credenciais ausentes ou ainda com o valor de exemplo do
+// .env.example — evita que o primeiro sinal do problema seja um cliente de
+// fora da cidade (frete por transportadora) sem conseguir pagar. Não afeta
+// pagamento físico (Uber Flash/99/combinar/cartão/dinheiro na entrega),
+// que nunca depende do Mercado Pago.
+function warnAboutMissingMercadoPagoCredentials() {
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN || '';
+  const looksLikePlaceholder = (v) => !v || v.includes('xxxxxxxx') || v.includes('TEST-xxx');
+  if (looksLikePlaceholder(token)) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '\n[aviso] MERCADOPAGO_ACCESS_TOKEN não parece configurado no .env (ainda com o valor de exemplo, ou vazio).\n' +
+      'Pix antecipado (pedidos por transportadora — Correios/Melhor Envio) vai falhar com 502 até você ' +
+      'colocar uma credencial real de sandbox, obtida em https://www.mercadopago.com.br/developers/panel — ' +
+      'lembre de reiniciar o servidor depois de editar o .env.\n'
+    );
+  }
+}
 
 // Sem STORE_WHATSAPP_NUMBER configurado, o ícone flutuante de WhatsApp e o
 // aviso de "combinar frete" somem silenciosamente em toda a loja — o
@@ -61,6 +81,7 @@ async function start() {
     warnAboutMissingWhatsAppNumber();
     warnAboutMissingObjectStorage();
     warnAboutMissingMonitoring();
+    warnAboutMissingMercadoPagoCredentials();
     // O job de expiração automática de reserva de estoque (30 min sem
     // confirmação de pagamento online) não se aplica mais — o pagamento
     // agora acontece na entrega, então "aguardando_pagamento" pode durar o
@@ -68,6 +89,7 @@ async function start() {
     // o pedido sozinho. Cancelamento continua disponível manualmente pelo
     // painel, se um pedido realmente não for adiante.
     scheduleAbandonedCartJob();
+    scheduleExpireUnpaidPixChargesJob();
 
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console

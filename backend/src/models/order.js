@@ -25,11 +25,14 @@ module.exports = (sequelize, DataTypes) => {
     shippedAt: { type: DataTypes.DATE, field: 'shipped_at' },
     deliveredAt: { type: DataTypes.DATE, field: 'delivered_at' },
     paymentMethod: {
-      type: DataTypes.ENUM('credit_card', 'debit_card', 'cash', 'pix'),
+      type: DataTypes.ENUM('credit_card', 'debit_card', 'cash', 'pix', 'pix_antecipado'),
       allowNull: false,
       field: 'payment_method',
     },
     changeFor: { type: DataTypes.DECIMAL(10, 2), field: 'change_for' },
+    pixPaymentId: { type: DataTypes.STRING(60), field: 'pix_payment_id' },
+    pixQrCode: { type: DataTypes.TEXT, field: 'pix_qr_code' },
+    pixCopyPaste: { type: DataTypes.TEXT, field: 'pix_copy_paste' },
   }, {
     tableName: 'orders',
     underscored: true,

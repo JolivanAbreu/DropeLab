@@ -8,7 +8,11 @@ const shippingIntegration = require('../integrations/shipping');
 const emailService = require('./email.service');
 const { nextOrderNumber } = require('../utils/generateOrderNumber');
 
-const VALID_PAYMENT_METHODS = ['credit_card', 'debit_card', 'cash', 'pix'];
+const VALID_PAYMENT_METHODS = ['credit_card', 'debit_card', 'cash', 'pix', 'pix_antecipado'];
+// Formas de pagamento combinadas com quem entrega (só fazem sentido pra
+// Uber Flash/99/"combinar com o vendedor", onde existe um entregador real
+// pra receber o pagamento na hora).
+const PHYSICAL_PAYMENT_METHODS = ['credit_card', 'debit_card', 'cash', 'pix'];
 
 /**
  * Cria um pedido a partir do carrinho atual (RF-18): dentro de uma única
@@ -16,11 +20,19 @@ const VALID_PAYMENT_METHODS = ['credit_card', 'debit_card', 'cash', 'pix'];
  * grava o pedido em "aguardando_pagamento". Se qualquer item não tiver
  * estoque suficiente, a transação inteira é revertida (RF-15).
  *
- * O pagamento acontece na entrega (não mais online pelo site) — o cliente
- * só informa aqui COMO pretende pagar, pra o entregador already saber se
- * precisa levar maquininha ou troco. changeFor só é relevante quando
- * paymentMethod === 'cash' e o cliente vai precisar de troco; se informado,
- * precisa ser suficiente pra cobrir o total do pedido.
+ * A forma de pagamento depende do tipo de frete escolhido:
+ * - Uber Flash/99/combinar (requiresArrangement=true): pagamento é
+ *   combinado com quem entrega — cliente só informa COMO (cartão físico,
+ *   dinheiro ou Pix na hora), sem processar nada aqui.
+ * - Correios/transportadora real via Melhor Envio (requiresArrangement=
+ *   false): não existe entregador pra combinar pagamento, então é
+ *   obrigatório pagar antecipado por Pix (pix_antecipado) — o pedido é
+ *   criado normalmente aqui, mas só avança pra separação depois que o
+ *   webhook do Mercado Pago confirmar o pagamento (ver payment.service).
+ *
+ * changeFor só é relevante quando paymentMethod === 'cash' e o cliente vai
+ * precisar de troco; se informado, precisa ser suficiente pra cobrir o
+ * total do pedido.
  */
 async function createOrder(userId, { addressId, shippingOptionId, couponCode, paymentMethod, changeFor }) {
   if (!VALID_PAYMENT_METHODS.includes(paymentMethod)) {
@@ -36,6 +48,19 @@ async function createOrder(userId, { addressId, shippingOptionId, couponCode, pa
   const shippingOptions = await shippingIntegration.quoteShipping({ zip: address.zip, items: cart.items });
   const shippingOption = shippingOptions.find((o) => o.id === shippingOptionId);
   if (!shippingOption) throw ApiError.badRequest('Opção de frete inválida', 'invalid_shipping_option');
+
+  if (shippingOption.requiresArrangement && paymentMethod === 'pix_antecipado') {
+    throw ApiError.badRequest(
+      'Pix antecipado é só para entrega por transportadora — para Uber Flash/99/combinar, escolha uma forma de pagamento na entrega',
+      'pix_antecipado_not_applicable',
+    );
+  }
+  if (!shippingOption.requiresArrangement && PHYSICAL_PAYMENT_METHODS.includes(paymentMethod)) {
+    throw ApiError.badRequest(
+      'Entrega por transportadora não tem entregador para combinar pagamento — escolha Pix antecipado',
+      'physical_payment_not_applicable',
+    );
+  }
 
   let coupon = null;
   let discount = 0;
@@ -174,7 +199,12 @@ const ADMIN_VALID_TRANSITIONS = {
   em_separacao: ['enviado', 'entregue', 'pago', 'cancelado'],
   enviado: ['entregue', 'pago', 'cancelado'],
   entregue: ['pago', 'reembolsado'],
-  pago: ['reembolsado'],
+  // "pago" pode ser tanto o ÚLTIMO passo (pagamento físico, confirmado só
+  // depois da entrega) quanto o PRIMEIRO (Pix antecipado, confirmado antes
+  // de qualquer separação/envio, via webhook do Mercado Pago) — por isso
+  // aqui ele também precisa poder seguir pro fluxo normal de fulfillment,
+  // não só terminar em reembolso.
+  pago: ['em_separacao', 'enviado', 'entregue', 'reembolsado'],
   cancelado: ['reembolsado'],
   reembolsado: [],
 };

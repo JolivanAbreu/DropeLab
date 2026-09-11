@@ -1,171 +1,105 @@
-const { Order, Payment, User, sequelize } = require('../models');
+const { Order, User, sequelize } = require('../models');
 const ApiError = require('../utils/apiError');
 const mercadopago = require('../integrations/mercadopago');
 const emailService = require('./email.service');
-const orderService = require('./order.service');
 
-const PIX_EXPIRATION_MINUTES = 30;
-
-async function assertOrderPayable(order) {
-  if (order.status !== 'aguardando_pagamento') {
-    throw ApiError.conflict('Este pedido não está aguardando pagamento', 'order_not_payable');
-  }
-}
-
-/**
- * Envolve qualquer chamada à API do Mercado Pago: falhas de rede, timeout,
- * credenciais inválidas ou respostas fora do formato esperado nunca devem
- * vazar como erro 500 genérico (ou expor detalhes internos ao cliente) — são
- * traduzidas para um 502 com uma mensagem segura e acionável.
- */
 async function callMercadoPago(fn) {
-  // Checagem prévia: se as credenciais nem parecem reais, nem vale a pena
-  // tentar a chamada de rede (evita 2-8s de timeout inútil) — e o motivo
-  // fica cristalino no log, em vez de aparecer só como "resposta inválida
-  // da API" (o que MP retorna quando o token é lixo: uma página de erro
-  // HTML em vez de JSON, uma mensagem enganosa de se debugar).
   if (!mercadopago.hasValidCredentials()) {
     // eslint-disable-next-line no-console
     console.error(
-      '[mercadopago] MERCADOPAGO_ACCESS_TOKEN não configurado (ou ainda é o valor de exemplo do .env.example). ' +
-      'Pagamentos por Pix/cartão vão continuar falhando até você colocar uma credencial de sandbox real — ' +
-      'gere uma em https://www.mercadopago.com.br/developers/panel e reinicie o servidor depois de editar o .env.'
+      '[mercadopago] MERCADOPAGO_ACCESS_TOKEN não configurado (ou ainda é o valor de exemplo). ' +
+      'Pix antecipado (pedidos por transportadora) vai continuar falhando até você colocar uma ' +
+      'credencial de sandbox real — gere uma em https://www.mercadopago.com.br/developers/panel.'
     );
-    throw new ApiError(
-      502,
-      'payment_provider_unavailable',
-      'Não foi possível processar o pagamento no momento. Tente novamente em instantes.',
-      process.env.NODE_ENV !== 'production'
-        ? { hint: 'MERCADOPAGO_ACCESS_TOKEN não está configurado no .env do backend — isso é esperado em ambiente de teste sem credenciais de sandbox reais.' }
-        : undefined
-    );
+    throw new ApiError(502, 'payment_provider_unavailable', 'Não foi possível gerar a cobrança Pix no momento. Tente novamente em instantes.');
   }
-
   try {
     return await fn();
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[mercadopago] falha na comunicação com a API:', err.message);
-    throw new ApiError(502, 'payment_provider_unavailable', 'Não foi possível processar o pagamento no momento. Tente novamente em instantes.');
+    throw new ApiError(502, 'payment_provider_unavailable', 'Não foi possível gerar a cobrança Pix no momento. Tente novamente em instantes.');
   }
 }
 
-/**
- * Processa pagamento com cartão de crédito (RF-20). O token já foi gerado no
- * navegador do cliente pelo SDK do Mercado Pago — o backend nunca recebe
- * número de cartão, validade ou CVV (RNF-06).
- */
-async function payWithCard(userId, { orderId, cardToken, installments }) {
-  const order = await Order.findOne({ where: { id: orderId, userId } });
-  if (!order) throw ApiError.notFound('Pedido não encontrado');
-  await assertOrderPayable(order);
-
-  const user = await User.findByPk(userId);
-
-  const mpResponse = await callMercadoPago(() => mercadopago.createCardPayment({
-    token: cardToken,
-    installments,
-    transactionAmount: Number(order.total),
-    description: `Pedido ${order.orderNumber} — Dravennx`,
-    payer: { email: user.email },
-    externalReference: order.id,
-  }));
-
-  const payment = await Payment.create({
-    orderId: order.id,
-    method: 'card',
-    providerPaymentId: String(mpResponse.id),
-    status: mapMpStatus(mpResponse.status),
-    amount: order.total,
-    installments,
-  });
-
-  if (payment.status === 'rejected') {
-    throw ApiError.paymentRequired('Pagamento recusado pela operadora do cartão', 'card_payment_rejected');
+function buildPayer(user, checkoutCpf) {
+  const payer = { email: user.email };
+  const cpf = checkoutCpf || user.cpf;
+  if (cpf) {
+    payer.identification = { type: 'CPF', number: cpf.replace(/\D/g, '') };
   }
-  if (payment.status === 'approved') {
-    await confirmOrderPaid(order.id, payment);
-  }
-
-  return payment;
+  return payer;
 }
 
-/**
- * Gera cobrança Pix (RF-21): retorna QR Code em base64 e código copia-e-cola,
- * ambos fornecidos diretamente pelo Mercado Pago, com expiração de 30 minutos.
- */
-async function payWithPix(userId, { orderId }) {
+function mapMpStatus(mpStatus) {
+  if (mpStatus === 'approved') return 'approved';
+  if (['rejected', 'cancelled'].includes(mpStatus)) return 'rejected';
+  return 'pending';
+}
+
+async function generatePixCharge(userId, { orderId, identificationNumber }) {
   const order = await Order.findOne({ where: { id: orderId, userId } });
   if (!order) throw ApiError.notFound('Pedido não encontrado');
-  await assertOrderPayable(order);
+  if (order.paymentMethod !== 'pix_antecipado') {
+    throw ApiError.badRequest('Este pedido não usa Pix antecipado', 'not_pix_antecipado_order');
+  }
+  if (order.status !== 'aguardando_pagamento') {
+    throw ApiError.conflict('Este pedido não está mais aguardando pagamento', 'order_not_payable');
+  }
 
   const user = await User.findByPk(userId);
 
   const mpResponse = await callMercadoPago(() => mercadopago.createPixPayment({
     transactionAmount: Number(order.total),
     description: `Pedido ${order.orderNumber} — Dravennx`,
-    payer: { email: user.email },
+    payer: buildPayer(user, identificationNumber),
     externalReference: order.id,
+    idempotencyKey: order.id,
   }));
 
-  const expiresAt = new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60 * 1000);
   const txData = mpResponse.point_of_interaction?.transaction_data || {};
+  order.pixPaymentId = String(mpResponse.id);
+  order.pixQrCode = txData.qr_code_base64 || null;
+  order.pixCopyPaste = txData.qr_code || null;
+  await order.save();
 
-  const payment = await Payment.create({
+  return {
     orderId: order.id,
-    method: 'pix',
-    providerPaymentId: String(mpResponse.id),
     status: mapMpStatus(mpResponse.status),
-    amount: order.total,
-    pixQrCode: txData.qr_code_base64,
-    pixCopyPaste: txData.qr_code,
-    pixExpiration: expiresAt,
-  });
-
-  return payment;
+    pixQrCode: order.pixQrCode,
+    pixCopyPaste: order.pixCopyPaste,
+  };
 }
 
-async function getPaymentStatus(paymentId) {
-  const payment = await Payment.findByPk(paymentId);
-  if (!payment) throw ApiError.notFound('Pagamento não encontrado');
-  return payment;
-}
-
-function mapMpStatus(mpStatus) {
-  // Mapeia os status do Mercado Pago para o enum interno de payments.status
-  if (mpStatus === 'approved') return 'approved';
-  if (['rejected', 'cancelled'].includes(mpStatus)) return 'rejected';
-  if (mpStatus === 'refunded' || mpStatus === 'charged_back') return 'refunded';
-  return 'pending';
-}
-
-async function confirmOrderPaid(orderId, payment) {
+async function confirmPixPaid(orderId) {
   return sequelize.transaction(async (transaction) => {
     const order = await Order.findByPk(orderId, { transaction });
-    if (!order || order.status !== 'aguardando_pagamento') return; // idempotência: já processado
+    if (!order || order.status !== 'aguardando_pagamento') return;
 
     order.status = 'pago';
     await order.save({ transaction });
 
-    payment.paidAt = new Date();
-    await payment.save({ transaction });
-
     const user = await User.findByPk(order.userId, { transaction });
-    // Fire-and-forget: mesma razão do order.service.js — confirmação de
-    // pagamento não pode esperar o SMTP responder.
     emailService.sendOrderStatusUpdate(user, order).catch((err) => {
       // eslint-disable-next-line no-console
-      console.error('[email] falha ao notificar pagamento confirmado', err.message);
+      console.error('[email] falha ao notificar pagamento Pix confirmado', err.message);
     });
   });
 }
 
-/**
- * Processa a notificação assíncrona do Mercado Pago (RF-22). Nunca confia
- * apenas no payload recebido: sempre consulta a API oficial para confirmar o
- * status antes de atualizar o pedido, e trata reenvios de forma idempotente
- * (RNF-12) verificando se o pagamento já está no status recebido.
- */
+async function getPixStatus(userId, orderId) {
+  const order = await Order.findOne({ where: { id: orderId, userId } });
+  if (!order) throw ApiError.notFound('Pedido não encontrado');
+  if (!order.pixPaymentId) throw ApiError.badRequest('Este pedido ainda não tem uma cobrança Pix gerada', 'pix_not_generated');
+
+  if (order.status === 'pago') return { status: 'approved' };
+
+  const mpPayment = await callMercadoPago(() => mercadopago.getPayment(order.pixPaymentId));
+  const status = mapMpStatus(mpPayment.status);
+  if (status === 'approved') await confirmPixPaid(order.id);
+  return { status };
+}
+
 async function handleWebhook({ dataId, xSignature, xRequestId }) {
   const isValid = mercadopago.isValidWebhookSignature({ xSignature, xRequestId, dataId });
   if (!isValid) {
@@ -173,52 +107,13 @@ async function handleWebhook({ dataId, xSignature, xRequestId }) {
   }
 
   const mpPayment = await callMercadoPago(() => mercadopago.getPayment(dataId));
-  const payment = await Payment.findOne({ where: { providerPaymentId: String(dataId) } });
-  if (!payment) {
-    // Pagamento não reconhecido — ignora silenciosamente (pode ser de outro sistema/teste)
-    return { ignored: true };
-  }
+  const order = await Order.findOne({ where: { pixPaymentId: String(dataId) } });
+  if (!order) return { ignored: true };
 
-  const newStatus = mapMpStatus(mpPayment.status);
-  if (payment.status === newStatus) {
-    return { alreadyProcessed: true }; // idempotência: evento duplicado
-  }
+  const status = mapMpStatus(mpPayment.status);
+  if (status === 'approved') await confirmPixPaid(order.id);
 
-  payment.status = newStatus;
-  await payment.save();
-
-  if (newStatus === 'approved') {
-    await confirmOrderPaid(payment.orderId, payment);
-  } else if (newStatus === 'rejected') {
-    // Libera o estoque reservado quando o pagamento é definitivamente recusado
-    const order = await Order.findByPk(payment.orderId);
-    if (order && order.status === 'aguardando_pagamento') {
-      await orderService.releaseOrderStock(order);
-    }
-  }
-
-  return { processed: true, status: newStatus };
+  return { processed: true, status };
 }
 
-/**
- * Aciona o estorno junto ao Mercado Pago quando um pedido pago é cancelado
- * (RF-29, RN-06).
- */
-async function refundOrderPayment(orderId) {
-  const payment = await Payment.findOne({ where: { orderId, status: 'approved' }, order: [['createdAt', 'DESC']] });
-  if (!payment) return null;
-
-  await callMercadoPago(() => mercadopago.refundPayment(payment.providerPaymentId));
-  payment.status = 'refunded';
-  await payment.save();
-  return payment;
-}
-
-module.exports = {
-  payWithCard,
-  payWithPix,
-  getPaymentStatus,
-  handleWebhook,
-  refundOrderPayment,
-  mapMpStatus,
-};
+module.exports = { generatePixCharge, getPixStatus, handleWebhook, confirmPixPaid, mapMpStatus };

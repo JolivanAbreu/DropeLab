@@ -12,6 +12,7 @@ const PAYMENT_METHOD_LABELS = {
   debit_card: 'Cartão de débito',
   cash: 'Dinheiro',
   pix: 'Pix',
+  pix_antecipado: 'Pix antecipado',
 };
 
 const STATUS_FILTERS = [
