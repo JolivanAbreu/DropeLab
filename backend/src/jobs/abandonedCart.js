@@ -5,28 +5,11 @@ const emailService = require('../services/email.service');
 
 const ABANDONED_AFTER_HOURS = 24;
 
-/**
- * Manda um lembrete por e-mail pra quem deixou item no carrinho e não
- * finalizou a compra em 24h (RF-40 ampliado). Um carrinho só entra na
- * lista se:
- *   1. Tiver pelo menos um item;
- *   2. A última mexida nele (adicionar/alterar quantidade) foi há mais de
- *      24h — carrinho "parado", não um em uso ativo;
- *   3. Ainda não recebeu lembrete desde essa última mexida — evita mandar
- *      o mesmo e-mail toda vez que o job roda enquanto nada muda, mas
- *      volta a ficar elegível se o cliente voltar, mexer no carrinho de
- *      novo, e abandonar outra vez.
- *
- * Carrinho de quem já finalizou a compra nunca aparece aqui — clearCart()
- * já esvazia o carrinho na criação do pedido (order.service.js), então não
- * há risco de mandar "você esqueceu algo" pra quem já comprou.
- */
+// Lembra quem deixou item no carrinho há 24h+ sem finalizar (RF-40). Só
+// reenvia se o carrinho mudou desde o último lembrete.
 async function sendAbandonedCartReminders() {
   const cutoff = new Date(Date.now() - ABANDONED_AFTER_HOURS * 60 * 60 * 1000);
 
-  // Última atividade de cada carrinho = item mais recentemente
-  // adicionado/alterado nele — mais confiável que updated_at do carrinho em
-  // si, que o Sequelize não toca automaticamente quando um item filho muda.
   const lastActivityByCart = await CartItem.findAll({
     attributes: ['cartId', [fn('MAX', col('updated_at')), 'lastActivity']],
     group: ['cart_id'],
@@ -53,11 +36,6 @@ async function sendAbandonedCartReminders() {
     ],
   });
 
-  // Filtra em JS (não dá pra comparar isso direto no WHERE do SQL sem uma
-  // subquery correlacionada): só é elegível quem nunca foi notificado, OU
-  // foi notificado antes da ÚLTIMA mexida NESTE carrinho específico — cada
-  // carrinho tem sua própria "última atividade", diferente de comparar
-  // contra o corte fixo de 24h global.
   const carts = candidateCarts.filter((cart) => {
     const lastActivity = lastActivityMap.get(cart.id);
     return !cart.abandonedEmailSentAt || cart.abandonedEmailSentAt < lastActivity;
@@ -88,8 +66,6 @@ async function sendAbandonedCartReminders() {
 }
 
 function scheduleAbandonedCartJob() {
-  // Uma vez por hora — não precisa da mesma frequência do job de
-  // expiração de reserva (que lida com estoque, mais sensível a atraso).
   cron.schedule('0 * * * *', () => {
     sendAbandonedCartReminders().catch((err) => {
       // eslint-disable-next-line no-console

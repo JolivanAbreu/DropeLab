@@ -6,9 +6,7 @@ const ApiError = require('../utils/apiError');
 const emailService = require('./email.service');
 const twoFactorService = require('./twoFactor.service');
 
-// Tokens de confirmação de e-mail e redefinição de senha guardados em memória
-// para simplificar este exemplo. Em produção, mover para uma tabela dedicada
-// (ex.: password_reset_tokens) com expiração e índice, ou para o Redis.
+// Tokens guardados em memória — em produção, mover pra tabela dedicada ou Redis.
 const emailTokens = new Map(); // token -> userId
 const resetTokens = new Map(); // token -> { userId, expiresAt }
 
@@ -22,10 +20,7 @@ function issueTokens(user) {
   return { accessToken, refreshToken };
 }
 
-// Token de curtíssima duração (5 min) usado só pra atravessar a segunda
-// etapa do login (código do 2FA) — não serve pra autenticar nenhuma outra
-// rota da API, só pra provar "esta pessoa acabou de acertar a senha" sem
-// precisar reenviar e-mail/senha de novo na segunda chamada.
+// Token de 5 min só pra atravessar a segunda etapa do 2FA — não autentica mais nada.
 function issueTwoFactorPendingToken(user) {
   return jwt.sign({ sub: user.id, type: 'two_factor_pending' }, process.env.JWT_SECRET, { expiresIn: '5m' });
 }
@@ -60,9 +55,7 @@ async function register({ name, email, password, cpf, phone }) {
 
   const token = crypto.randomBytes(32).toString('hex');
   emailTokens.set(token, user.id);
-  // Best-effort: uma falha no envio do e-mail de confirmação (SMTP fora do ar,
-  // timeout etc.) não pode derrubar o cadastro, que já foi persistido com
-  // sucesso. O cliente pode solicitar reenvio depois.
+  // Falha no e-mail não derruba o cadastro, já persistido.
   emailService.sendEmailConfirmation(user, token).catch((err) => {
     // eslint-disable-next-line no-console
     console.error('[email] falha ao enviar confirmação de cadastro:', err.message);

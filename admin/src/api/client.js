@@ -91,11 +91,8 @@ export const api = {
   delete: (path, opts) => apiFetch(path, { ...opts, method: 'DELETE' }),
 };
 
-/**
- * Upload de arquivo via multipart/form-data — não usa apiFetch porque aquele
- * sempre serializa o corpo como JSON. O header Content-Type é deixado para o
- * navegador definir sozinho (inclui o boundary do multipart automaticamente).
- */
+// multipart/form-data — não usa apiFetch (que sempre serializa como JSON);
+// Content-Type fica a cargo do navegador (inclui o boundary automaticamente).
 export async function uploadFile(path, file) {
   const token = getAccessToken();
   const formData = new FormData();

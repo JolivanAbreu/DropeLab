@@ -2,12 +2,8 @@ const { ProductVariant, Product, Wishlist, User, sequelize } = require('../model
 const ApiError = require('../utils/apiError');
 const emailService = require('./email.service');
 
-/**
- * Decrementa o estoque de uma variação de forma atômica: o UPDATE só afeta a
- * linha se houver saldo suficiente (WHERE stock_quantity >= quantity), o que
- * evita estoque negativo mesmo sob requisições concorrentes (RN-02) sem
- * precisar de lock explícito de linha.
- */
+// UPDATE atômico (WHERE stock_quantity >= quantity) evita estoque negativo
+// sob concorrência, sem precisar de lock de linha (RN-02).
 async function reserveStock(variantId, quantity, { transaction } = {}) {
   const [rows] = await sequelize.query(
     `UPDATE product_variants
@@ -39,11 +35,6 @@ async function getTotalStockForProduct(productId) {
   return total || 0;
 }
 
-/**
- * Avisa por e-mail quem favoritou o produto que ele voltou a ter estoque —
- * best-effort: uma falha de envio nunca deve interromper o ajuste de
- * estoque em si (mesmo princípio já usado nos e-mails de pedido/cadastro).
- */
 async function notifyWishlistersBackInStock(productId) {
   const product = await Product.findByPk(productId);
   if (!product) return;
@@ -67,13 +58,8 @@ async function adjustStock(variantId, delta, reason) {
     throw ApiError.unprocessable('Ajuste resultaria em estoque negativo');
   }
 
-  // Só verifica se o produto (todas as variações somadas) estava
-  // completamente zerado ANTES deste ajuste — e só quando o ajuste é de
-  // entrada (delta > 0), já que só faz sentido avisar "voltou ao estoque"
-  // em reposição, não em baixa. Se o total já estava em zero e esta
-  // variação está recebendo estoque, o total necessariamente passa a ser
-  // positivo depois (nenhuma variação pode estar com saldo negativo), sem
-  // precisar de uma segunda consulta pra confirmar.
+  // Só avisa "voltou ao estoque" se o produto inteiro estava zerado antes
+  // de uma entrada (delta > 0) — não faz sentido em baixa de estoque.
   const productWasOutOfStock = delta > 0 && (await getTotalStockForProduct(variant.productId)) === 0;
 
   variant.stockQuantity = newQuantity;

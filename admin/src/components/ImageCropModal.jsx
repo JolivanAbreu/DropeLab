@@ -4,24 +4,14 @@ import 'react-easy-crop/react-easy-crop.css';
 import { getCroppedImageBlob } from '../lib/cropImage';
 import Button from './Button';
 
-/**
- * Modal de recorte — abre com a foto recém-selecionada, o admin arrasta e
- * dá zoom até enquadrar do jeito que quer, dentro da proporção alvo (3:4
- * pra foto de produto, mais larga pra banner). Ao confirmar, devolve um
- * arquivo já recortado (Blob), pronto pra subir pro mesmo endpoint de
- * upload de sempre — o corte é de verdade, não é só um efeito visual.
- */
+// Devolve um arquivo já recortado (Blob) — o corte é de verdade, não só visual.
 export default function ImageCropModal({ imageSrc, aspect = 3 / 4, onCancel, onConfirm, queuePosition, queueTotal }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [saving, setSaving] = useState(false);
-  // Guarda síncrona contra clique duplo: o estado "saving" só desabilita o
-  // botão no PRÓXIMO render do React, então dois cliques bem rápidos (comum
-  // enquanto a pessoa espera algum retorno visual aparecer) conseguiam
-  // disparar handleConfirm duas vezes antes do disabled=true realmente
-  // travar o botão — resultando em duas imagens enviadas pra uma única
-  // confirmação. Uma ref muda instantaneamente, sem esperar re-render.
+  // Ref (não state) porque muda instantaneamente — evita clique duplo antes
+  // do disabled=true entrar em vigor no próximo render.
   const confirmingRef = useRef(false);
 
   const onCropComplete = useCallback((_croppedArea, pixels) => {

@@ -8,14 +8,10 @@ const SORT_MAP = {
   newest: [['createdAt', 'DESC']],
   price_asc: [['basePrice', 'ASC']],
   price_desc: [['basePrice', 'DESC']],
-  best_selling: [['createdAt', 'DESC']], // ligação com order_items.sum(quantity) é feita em relatórios (documento 3, seção de índices)
+  best_selling: [['createdAt', 'DESC']],
 };
 
-/**
- * Busca média de avaliação e quantidade de reviews para um conjunto de
- * produtos em uma única query agregada (evita N+1) e devolve um mapa
- * productId -> { avgRating, reviewCount } pronto para mesclar na resposta.
- */
+// Uma query agregada para o conjunto inteiro de produtos, evitando N+1.
 async function getRatingSummary(productIds) {
   if (productIds.length === 0) return {};
 
@@ -45,12 +41,6 @@ function attachRatings(products, summary) {
   });
 }
 
-/**
- * Produtos marcados pelo admin para aparecer em destaque na loja — banner
- * principal da home (normalmente um só) ou fileira de destaques (vários).
- * Sempre filtra por active:true, senão um produto desativado continuaria
- * aparecendo em destaque na vitrine.
- */
 async function listFeaturedProducts(slot) {
   const products = await Product.findAll({
     where: { featuredSlot: slot, active: true },
@@ -134,11 +124,7 @@ async function listCategories() {
 
 const ADMIN_PAGE_SIZE = 30;
 
-/**
- * Lista produtos para o painel administrativo — ao contrário de listProducts
- * (loja pública), inclui produtos inativos, já que o operador precisa
- * encontrá-los para reativar ou ajustar estoque.
- */
+// Ao contrário de listProducts (loja pública), inclui produtos inativos.
 async function listProductsForAdmin({ search, page = 1 } = {}) {
   const where = {};
   if (search) {
@@ -219,10 +205,8 @@ async function updateProduct(id, payload) {
     const { variants, images, ...productFields } = payload;
     await product.update(productFields, { transaction });
 
-    // Variações: atualiza as que já têm id, cria as novas. Nunca exclui aqui
-    // — remover uma variação com pedidos associados quebraria o histórico
-    // (FK RESTRICT em order_items); para "aposentar" uma variação, zere o
-    // estoque em vez de excluí-la.
+    // Nunca exclui variação aqui — FK RESTRICT em order_items quebraria o
+    // histórico. Pra aposentar uma variação, zere o estoque.
     if (Array.isArray(variants)) {
       for (const variant of variants) {
         if (variant.id) {
@@ -246,8 +230,6 @@ async function updateProduct(id, payload) {
       }
     }
 
-    // Imagens: substitui a lista inteira — não há histórico de pedido
-    // dependente de imagem, então é seguro recriar do zero a cada edição.
     if (Array.isArray(images)) {
       await ProductImage.destroy({ where: { productId: id }, transaction });
       await ProductImage.bulkCreate(
@@ -257,27 +239,18 @@ async function updateProduct(id, payload) {
     }
   });
 
-  // Recarrega após o commit — mais simples e seguro do que depender de
-  // includes com separate:true enxergarem a transação em aberto.
   return getProductForAdmin(id);
 }
 
+// Exclusão lógica — preserva o histórico de order_items.
 async function deactivateProduct(id) {
-  // Exclusão lógica: preserva o histórico de order_items (documento 3, seção 4)
   const product = await Product.findByPk(id);
   if (!product) throw ApiError.notFound('Produto não encontrado');
   await product.update({ active: false });
 }
 
-/**
- * Exclusão DEFINITIVA — remove o produto de verdade do banco, com variações,
- * imagens, avaliações e favoritos em cascata. Só é permitida quando o
- * produto NUNCA apareceu em nenhum pedido: order_items.variant_id tem
- * RESTRICT no banco de propósito, então tentar excluir um produto já
- * vendido quebraria o histórico financeiro — em vez de deixar o banco
- * rejeitar com um erro de constraint, o service checa antes e devolve uma
- * mensagem clara orientando a usar "desativar" nesse caso.
- */
+// Exclusão definitiva — só permitida se o produto nunca foi vendido
+// (order_items.variant_id tem RESTRICT); senão, oriente a usar "desativar".
 async function deleteProductPermanently(id) {
   const product = await Product.findByPk(id, { include: [{ model: ProductVariant, as: 'variants' }] });
   if (!product) throw ApiError.notFound('Produto não encontrado');
@@ -303,14 +276,6 @@ async function reactivateProduct(id) {
   return product;
 }
 
-/**
- * Ativa/desativa vários produtos de uma vez — mesma exclusão lógica de
- * deactivateProduct/reactivateProduct, só que em lote. IDs que não existem
- * são silenciosamente ignorados (não é erro pedir pra ativar um produto que
- * já foi excluído de outro jeito entre a seleção e o clique); o retorno diz
- * quantos foram realmente afetados, pra a tela poder avisar se algo ficou
- * de fora.
- */
 async function bulkSetActive(ids, active) {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw ApiError.badRequest('Informe ao menos um id de produto');
@@ -319,11 +284,7 @@ async function bulkSetActive(ids, active) {
   return { requested: ids.length, updated: affectedCount };
 }
 
-/**
- * Reajusta o preço-base de vários produtos de uma vez, por percentual
- * (positivo = aumento, negativo = redução). Não altera priceOverride de
- * variações individuais — só o preço-base do produto.
- */
+// Reajusta o preço-base em lote, por percentual; não altera priceOverride.
 async function bulkAdjustPrice(ids, percentage) {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw ApiError.badRequest('Informe ao menos um id de produto');

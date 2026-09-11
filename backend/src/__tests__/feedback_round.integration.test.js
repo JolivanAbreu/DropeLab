@@ -211,7 +211,7 @@ describe('Upload de imagem', () => {
         .attach('image', tmpPath);
 
       expect(res.status).toBe(201);
-      expect(res.body.url).toMatch(/\/uploads\/.+\.png$/);
+      expect(res.body.url).toMatch(/\/uploads\/.+\.webp$/);
     } finally {
       fs.unlinkSync(tmpPath);
     }

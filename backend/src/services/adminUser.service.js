@@ -7,10 +7,7 @@ const ApiError = require('../utils/apiError');
 const PAGE_SIZE = 30;
 const VALID_ROLES = ['customer', 'operator', 'admin'];
 
-/**
- * Lista usuários para o painel — busca por nome/e-mail e filtro por perfil.
- * Não expõe passwordHash (defaultScope do model User já exclui esse campo).
- */
+// defaultScope do model User já exclui passwordHash.
 async function listUsers({ search, role, page = 1 } = {}) {
   const where = {};
   if (search) {
@@ -47,14 +44,7 @@ async function setUserRole(targetUserId, newRole, requestingUserId) {
   return user;
 }
 
-/**
- * Gera uma senha temporária aleatória para o usuário — usada quando o
- * cliente não consegue redefinir a própria senha por e-mail (ver README:
- * "outra forma de alterar a senha"). A senha em texto puro só existe neste
- * retorno; nunca é logada nem persistida — cabe à equipe repassar ao
- * cliente por um canal direto (telefone, WhatsApp) e orientar a trocá-la
- * assim que entrar.
- */
+// Senha em texto puro só existe neste retorno — nunca é logada nem persistida.
 async function resetUserPassword(targetUserId) {
   const user = await User.findByPk(targetUserId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');

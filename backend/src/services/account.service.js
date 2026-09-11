@@ -15,9 +15,6 @@ async function updateProfile(userId, { name, phone }) {
   const user = await User.findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
 
-  // E-mail, CPF e perfil (role) não são editáveis por aqui: e-mail tem fluxo
-  // próprio (changeEmail, abaixo, exige senha), CPF é documento fixo, e role
-  // é controlado apenas pelo painel administrativo.
   if (name !== undefined) user.name = name;
   if (phone !== undefined) user.phone = phone;
   await user.save();
@@ -56,12 +53,7 @@ async function changePassword(userId, { currentPassword, newPassword }) {
   await user.save();
 }
 
-/**
- * Exportação de dados pessoais (LGPD, art. 18) — reúne tudo o que o sistema
- * guarda sobre o cliente logado num único documento, pra ele baixar. Não
- * inclui dados de outros clientes nem informação interna (ex.: hash de
- * senha, tokens).
- */
+// Exportação de dados pessoais (LGPD, art. 18).
 async function exportData(userId) {
   const user = await User.findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
@@ -115,15 +107,9 @@ async function exportData(userId) {
   };
 }
 
-/**
- * Autoexclusão de conta (LGPD, art. 18, VI). Não é uma remoção física:
- * pedidos e pagamentos têm retenção legal (obrigação fiscal/contábil), então
- * a conta é ANONIMIZADA — dados pessoais identificáveis são substituídos,
- * login passa a ser bloqueado, mas o histórico de pedidos (necessário pra
- * contabilidade da loja) permanece íntegro, agora associado a um usuário
- * anônimo. Endereços, favoritos e carrinho — sem essa exigência legal — são
- * excluídos de verdade.
- */
+// Autoexclusão (LGPD, art. 18, VI) — anonimiza em vez de apagar, já que
+// pedidos têm retenção fiscal obrigatória. Endereços/favoritos/carrinho são
+// excluídos de verdade.
 async function deleteAccount(userId, currentPassword) {
   const user = await User.scope('withPassword').findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
@@ -145,7 +131,7 @@ async function deleteAccount(userId, currentPassword) {
   user.email = `excluido-${anonymizedSuffix}@removido.dravennx`;
   user.cpf = null;
   user.phone = null;
-  user.passwordHash = await bcrypt.hash(uuidv4(), 12); // login fica impossível — ninguém sabe essa senha
+  user.passwordHash = await bcrypt.hash(uuidv4(), 12);
   user.deletedAt = new Date();
   await user.save();
 }

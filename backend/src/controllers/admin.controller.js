@@ -11,6 +11,7 @@ const promoBannerService = require('../services/promoBanner.service');
 const instagramPostService = require('../services/instagramPost.service');
 const newsletterService = require('../services/newsletter.service');
 const storageService = require('../integrations/storage');
+const imageOptimizer = require('../integrations/imageOptimizer');
 const auditLogService = require('../services/auditLog.service');
 const { sequelize, Coupon, Category } = require('../models');
 
@@ -233,15 +234,13 @@ const deleteInstagramPost = asyncHandler(async (req, res) => {
 const uploadImage = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('Nenhum arquivo enviado', 'no_file');
 
-  // Monta a URL de fallback (disco local) a partir da própria requisição —
-  // só é usada quando nenhum bucket S3/R2 está configurado (ver
-  // integrations/storage.js). Com o bucket configurado, a URL pública vem
-  // de lá, não daqui.
+  const { buffer, mimetype, extension } = await imageOptimizer.optimizeImage(req.file.buffer);
+
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   const { url } = await storageService.saveFile({
-    buffer: req.file.buffer,
-    originalName: req.file.originalname,
-    mimetype: req.file.mimetype,
+    buffer,
+    originalName: `imagem${extension}`,
+    mimetype,
     requestBaseUrl: baseUrl,
   });
   res.status(201).json({ url });

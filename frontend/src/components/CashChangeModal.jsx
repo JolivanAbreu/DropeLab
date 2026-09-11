@@ -2,13 +2,7 @@ import { useState } from 'react';
 import Button from './Button';
 import { formatPrice } from '../lib/format';
 
-/**
- * Fluxo de duas perguntas quando o cliente escolhe pagar em dinheiro na
- * entrega: primeiro se precisa de troco, e se sim, com quanto vai pagar —
- * o troco em si é calculado na hora (valor informado - total), nunca
- * armazenado separadamente, pra nunca ficar inconsistente com o total real
- * do pedido.
- */
+// Troco calculado na hora (valor - total), nunca armazenado separadamente.
 export default function CashChangeModal({ total, onConfirm, onCancel }) {
   const [needsChange, setNeedsChange] = useState(null); // null | true | false
   const [amount, setAmount] = useState('');

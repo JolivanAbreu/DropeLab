@@ -11,9 +11,7 @@ const linkClass = ({ isActive }) =>
     isActive ? 'bg-white text-ink' : 'text-white/70 hover:bg-white/10 hover:text-white'
   }`;
 
-// Lembra quais seções o admin recolheu, persistido entre sessões — assim
-// quem só usa "Pedidos" no dia a dia pode recolher o resto de vez e não
-// precisa reabrir tudo a cada F5.
+// Seções recolhidas persistem entre sessões (localStorage).
 const COLLAPSE_STORAGE_KEY = 'dravennx_admin_collapsed_sections';
 
 function loadCollapsedSections() {
@@ -29,14 +27,11 @@ function saveCollapsedSections(set) {
   try {
     localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...set]));
   } catch {
-    // localStorage indisponível (modo privado etc.) — só não persiste, sem quebrar a navegação
+    // localStorage indisponível — só não persiste
   }
 }
 
-// Agrupa a navegação por assunto em vez de uma lista solta de 9 itens —
-// cada seção tem um rótulo curto e pode ser recolhida/expandida
-// individualmente, mostrando só os links relevantes pro que o admin está
-// fazendo naquele momento.
+// Navegação agrupada por assunto, cada seção recolhível.
 function useNavSections(isAdmin) {
   const sections = [
     {
@@ -94,8 +89,7 @@ function NavContent({ onNavigate, collapsedSections, onToggleSection }) {
       <nav className="mt-8 flex flex-1 flex-col gap-1 overflow-y-auto">
         {sections.map((section) => {
           const isCollapsed = collapsedSections.has(section.label);
-          // Se um item desta seção estiver ativo, mantém a seção expandida
-          // mesmo que estivesse recolhida — nunca esconde onde o admin está.
+          // Nunca esconde a seção da rota atual, mesmo se recolhida.
           const hasActiveItem = section.items.some((item) => location.pathname === item.to);
 
           return (

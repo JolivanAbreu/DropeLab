@@ -85,8 +85,7 @@ export default function ProductForm() {
   const [cropImageSrc, setCropImageSrc] = useState(null);
   const [recropTarget, setRecropTarget] = useState(null); // { tempId, url } — recorte de uma foto JÁ cadastrada
 
-  // Gera uma URL temporária pro arquivo no topo da fila de recorte, e
-  // libera a anterior da memória quando troca ou quando a fila esvazia.
+  // URL temporária do arquivo no topo da fila; libera a anterior ao trocar.
   useEffect(() => {
     if (cropQueue.length === 0) {
       setCropImageSrc(null);
@@ -147,9 +146,7 @@ export default function ProductForm() {
     if (files.length === 0) return;
 
     setUploadError('');
-    // Cada foto passa pelo recorte individualmente (é uma interação manual
-    // — arrastar/zoom — não dá pra automatizar em lote). A fila processa
-    // uma de cada vez; cancelar uma não trava as próximas da lista.
+    // Fila processa uma foto de cada vez; cancelar uma não trava as próximas.
     setCropQueue(files);
     setCropQueueTotal(files.length);
   }
@@ -176,13 +173,8 @@ export default function ProductForm() {
     setCropQueue((prev) => prev.slice(1));
   }
 
-  /**
-   * Reabre o recorte pra uma foto JÁ cadastrada (mesmo já tendo sido salva
-   * antes) — funciona tanto pra imagem enviada nesta sessão quanto pra uma
-   * de um produto que já existia. Sobe a nova versão recortada como um
-   * arquivo novo e substitui só a URL daquela posição na lista, sem afetar
-   * as outras fotos.
-   */
+  // Reabre o recorte de uma foto já cadastrada; sobe a versão nova e
+  // substitui só a URL daquela posição, sem afetar as outras.
   async function handleRecropConfirm(croppedFile) {
     setUploadingImage(true);
     setUploadError('');

@@ -14,12 +14,7 @@ function resolvePeriod({ from, to }) {
   return { start, end };
 }
 
-/**
- * Relatório de vendas por período — resumo, quebra por status, por meio de
- * pagamento, série diária e produtos mais vendidos. Pedidos cancelados são
- * excluídos do faturamento (mas aparecem na quebra por status, para dar
- * visibilidade da taxa de cancelamento).
- */
+// Pedidos cancelados são excluídos do faturamento, mas aparecem na quebra por status.
 async function getSalesReport({ from, to }) {
   const { start, end } = resolvePeriod({ from, to });
   const replacements = { start, end };
@@ -44,9 +39,6 @@ async function getSalesReport({ from, to }) {
     ORDER BY count DESC;
   `, { replacements });
 
-  // Pagamento acontece na entrega (não mais online) — a forma de pagamento
-  // já vem escolhida na criação do pedido (orders.payment_method), sem
-  // depender mais de um registro de pagamento aprovado via provedor externo.
   const [byPaymentMethod] = await sequelize.query(`
     SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(total), 0) AS revenue
     FROM orders
@@ -91,7 +83,7 @@ async function getSalesReport({ from, to }) {
   };
 }
 
-/** Linhas detalhadas de pedidos no período, para exportação em CSV. */
+// Linhas detalhadas de pedidos no período, para exportação em CSV.
 async function getSalesExportRows({ from, to }) {
   const { start, end } = resolvePeriod({ from, to });
 

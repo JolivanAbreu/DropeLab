@@ -5,19 +5,13 @@ import Button from './Button';
 import { formatPrice } from '../lib/format';
 import { focalPointToCss } from '../lib/imageFocal';
 
-/**
- * Banner principal da home — puxa a foto de um produto real do catálogo
- * (o que o admin marcou como "Banner principal" em Produtos), não uma
- * imagem genérica. Se nenhum produto estiver marcado, o banner some e a
- * home segue só com a seção de novidades.
- */
+// Puxa a foto de um produto real marcado como "Banner principal" — some se nenhum estiver marcado.
 export default function FeaturedBanner({ product }) {
   const [hovering, setHovering] = useState(false);
   if (!product) return null;
 
   const images = product.images || [];
-  // No hover, troca pra segunda foto (se existir) — dá uma prévia de outro
-  // ângulo da peça sem precisar clicar. Some se só houver uma foto.
+  // Hover troca pra segunda foto, se existir.
   const activeImage = hovering && images[1] ? images[1] : images[0];
   const objectPosition = focalPointToCss(product.imageFocalPoint);
 

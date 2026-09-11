@@ -5,13 +5,8 @@ import { formatPrice } from '../lib/format';
 
 const POLL_INTERVAL_MS = 4000;
 
-/**
- * Mostra o QR Code Pix gerado pro pedido e fica consultando o status
- * automaticamente (a cada 4s) até confirmar o pagamento — o cliente não
- * precisa clicar em nada, só escanear e esperar. Usado exclusivamente pra
- * pedidos com frete por transportadora real (Correios/Melhor Envio), onde
- * não existe entregador pra combinar pagamento na entrega.
- */
+// Gera o QR Code Pix e consulta o status a cada 4s até confirmar —
+// exclusivo pra frete por transportadora (sem entregador pra combinar pagamento).
 export default function PixCheckoutPanel({ orderId, total, onConfirmed }) {
   const [pixData, setPixData] = useState(null);
   const [error, setError] = useState('');

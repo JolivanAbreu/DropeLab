@@ -9,13 +9,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import { formatPrice } from '../lib/format';
 import { focalPointToCss } from '../lib/imageFocal';
 
-/**
- * Card de produto — segue o padrão visual do mockup de referência: cartão
- * branco com cantos discretos, imagem 3:4 com slider (bolinhas + setas no
- * hover quando há mais de uma foto), selo (badgeLabel do admin) no canto,
- * e bloco de informação abaixo da imagem com título, favoritar, preço e
- * botão "Adicionar" sempre visível (não escondido no hover).
- */
+// Card de produto — imagem 3:4 com slider, selo do admin, botão "Adicionar" sempre visível.
 export default function ProductCard({ product }) {
   const { isAuthenticated } = useAuth();
   const { addItem } = useCart();

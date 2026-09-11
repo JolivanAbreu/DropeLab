@@ -1,8 +1,4 @@
-// Valores padrão pra item sem peso/dimensão cadastrados — uma camiseta ou
-// blusa oversized dobrada cabe razoavelmente numa caixa desse tamanho. É
-// uma estimativa conservadora (peca pro lado de "cotação um pouco mais
-// cara" em vez de "pacote rejeitado por dimensão insuficiente"), usada só
-// como fallback pra produtos cadastrados antes de existir esse campo.
+// Fallback pra produto sem peso/dimensão cadastrados.
 const DEFAULT_ITEM = { weightKg: 0.3, heightCm: 5, widthCm: 25, lengthCm: 20 };
 
 function isConfigured() {
@@ -19,14 +15,8 @@ function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
-/**
- * Cotação de frete real por CEP, via Melhor Envio — retorna uma lista de
- * serviços de transportadora (PAC, SEDEX, Jadlog etc.) com preço e prazo
- * reais para o CEP de destino informado. Nunca lança erro pra fora: se a
- * API estiver fora do ar, mal configurada, ou o CEP não for atendido,
- * retorna lista vazia — a loja continua funcionando só com as opções
- * fixas (Uber Flash/99/combinar) nesse caso, sem quebrar o checkout.
- */
+// Nunca lança erro pra fora — se a API falhar, retorna lista vazia e a
+// loja segue só com as opções fixas (Uber Flash/99/combinar).
 async function quoteByCep({ toPostalCode, items }) {
   if (!isConfigured()) return [];
 
@@ -54,7 +44,6 @@ async function quoteByCep({ toPostalCode, items }) {
         'Content-Type': 'application/json',
         Accept: 'application/json',
         Authorization: `Bearer ${process.env.MELHOR_ENVIO_TOKEN}`,
-        // Exigido pela API — nome da aplicação + e-mail de contato técnico.
         'User-Agent': process.env.MELHOR_ENVIO_USER_AGENT || 'Dravennx (contato@dravennx.com.br)',
       },
       body: JSON.stringify({
@@ -73,9 +62,6 @@ async function quoteByCep({ toPostalCode, items }) {
     const data = await res.json();
     if (!Array.isArray(data)) return [];
 
-    // Serviços com "error" preenchido não estão disponíveis pra essa rota
-    // (ex.: transportadora não atende a região) — descarta em vez de
-    // mostrar uma opção quebrada pro cliente escolher.
     return data
       .filter((quote) => !quote.error && quote.price)
       .map((quote) => ({

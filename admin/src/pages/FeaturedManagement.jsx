@@ -10,12 +10,8 @@ const SLOT_LABELS = {
   destaque: 'Fileira de destaques',
 };
 
-/**
- * Visão central de "onde cada produto aparece na home" — complementa (não
- * substitui) o campo já existente dentro do formulário de cada produto:
- * aqui dá pra ver e trocar de uma vez todos os produtos marcados, sem
- * precisar abrir cada um individualmente pra descobrir quem está em quê.
- */
+// Visão central de "onde cada produto aparece na home" — troca todos de uma
+// vez, sem abrir cada produto individualmente.
 export default function FeaturedManagement() {
   const [products, setProducts] = useState(null);
   const [search, setSearch] = useState('');

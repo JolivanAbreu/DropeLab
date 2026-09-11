@@ -5,12 +5,7 @@ import { focalPointToCss } from '../lib/imageFocal';
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=1600&q=80';
 
-/**
- * Banner de campanha configurável pelo admin (Painel → Banner) — imagem e
- * textos vêm de GET /promo-banner. Enquanto o admin não configurar nada, o
- * backend já devolve uma copy padrão sensata (ver promoBanner.service.js),
- * então essa seção nunca fica vazia.
- */
+// Backend devolve uma copy padrão enquanto o admin não configurar nada.
 export default function PromoBanner() {
   const [banner, setBanner] = useState(null);
 

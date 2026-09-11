@@ -1,22 +1,11 @@
 const ApiError = require('../utils/apiError');
 const melhorEnvio = require('./melhorEnvio');
 
-/**
- * Opções de entrega da loja. Uber Flash e 99 são apps externos de corrida —
- * a loja não cobra nem define o valor da corrida: o cliente pede direto no
- * app e paga o valor mostrado lá (por isso price: 0 aqui, e
- * contactMethod: 'customer_app' avisa o frontend a mostrar essa instrução
- * em vez de "vamos te chamar no WhatsApp"). "Combinar com o vendedor" é o
- * caso oposto — a loja que entra em contato (contactMethod: 'store').
- *
- * Quando o Melhor Envio está configurado (MELHOR_ENVIO_TOKEN +
- * STORE_POSTAL_CODE), as opções fixas abaixo vêm ACRESCIDAS de cotações
- * reais de transportadora pro CEP informado — com preço e prazo garantidos,
- * cobrados normalmente no checkout (sem "aguardar contato"). Sem essas
- * variáveis configuradas, ou se a API do Melhor Envio falhar/timeoutar, a
- * loja segue funcionando só com as três opções fixas — nunca quebra o
- * checkout por causa da cotação externa.
- */
+// Uber Flash/99: apps externos, o cliente paga a corrida por lá (price: 0,
+// contactMethod: 'customer_app'). Combinar: a loja entra em contato
+// (contactMethod: 'store'). Com Melhor Envio configurado, essas opções
+// fixas vêm acrescidas de cotações reais de transportadora; sem isso ou se
+// a API falhar, segue só com as fixas — nunca quebra o checkout.
 async function quoteShipping({ zip, items }) {
   try {
     const fixedOptions = [

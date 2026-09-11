@@ -20,12 +20,7 @@ function generateBackupCodes() {
   return codes;
 }
 
-/**
- * Início da ativação — gera um segredo novo (ainda não ativo) e devolve o
- * QR Code pra escanear no app autenticador. O segredo só passa a valer de
- * verdade depois de confirmado com um código correto (ver confirmSetup);
- * gerar de novo antes de confirmar simplesmente substitui o pendente.
- */
+// Segredo só passa a valer depois de confirmado (ver confirmSetup).
 async function startSetup(userId) {
   const user = await User.findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
@@ -39,13 +34,7 @@ async function startSetup(userId) {
   return { secret, qrCodeDataUrl };
 }
 
-/**
- * Confirma a ativação — exige um código válido gerado a partir do segredo
- * pendente, provando que o app autenticador foi configurado corretamente
- * antes de tornar o 2FA obrigatório no login. Gera os códigos de backup
- * nesse momento e os retorna em texto puro UMA ÚNICA VEZ — depois disso só
- * os hashes ficam salvos, não há como recuperá-los de novo.
- */
+// Códigos de backup só aparecem em texto puro aqui — depois só o hash fica salvo.
 async function confirmSetup(userId, code) {
   const user = await User.scope('withPassword').findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
@@ -63,10 +52,7 @@ async function confirmSetup(userId, code) {
   return { backupCodes };
 }
 
-/**
- * Desativa o 2FA — exige a senha atual (não o código do app, que pode já
- * estar inacessível se for justamente o motivo de querer desativar).
- */
+// Exige a senha atual, não o código do app (que pode ser o motivo de desativar).
 async function disable(userId, password) {
   const user = await User.scope('withPassword').findByPk(userId);
   if (!user) throw ApiError.notFound('Usuário não encontrado');
@@ -77,12 +63,7 @@ async function disable(userId, password) {
   await user.update({ twoFactorEnabled: false, twoFactorSecret: null, twoFactorBackupCodes: null });
 }
 
-/**
- * Verifica um código no momento do login — aceita tanto o código de 6
- * dígitos do app autenticador quanto um código de backup (formato
- * XXXX-XXXX). Um código de backup é consumido (removido da lista) no
- * primeiro uso — nunca funciona de novo depois.
- */
+// Aceita código do app OU de backup — o de backup é consumido no primeiro uso.
 async function verifyLoginCode(userId, code) {
   const user = await User.scope('withPassword').findByPk(userId);
   if (!user || !user.twoFactorEnabled) throw ApiError.unauthorized('2FA não está ativo para esta conta');

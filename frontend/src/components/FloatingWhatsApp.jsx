@@ -9,12 +9,7 @@ function WhatsAppIcon() {
   );
 }
 
-/**
- * Ícone flutuante de "falar no WhatsApp" — fica disponível em qualquer
- * página da loja (não depende de estar vendo um pedido específico). Some
- * automaticamente se a loja nunca configurou um número de WhatsApp
- * (STORE_WHATSAPP_NUMBER no backend).
- */
+// Some automaticamente se STORE_WHATSAPP_NUMBER não estiver configurado.
 export default function FloatingWhatsApp() {
   const [whatsappNumber, setWhatsappNumber] = useState(null);
 

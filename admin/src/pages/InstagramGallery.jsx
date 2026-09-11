@@ -7,14 +7,8 @@ import { ErrorNotice, LoadingBlock, EmptyState } from '../components/States';
 
 const emptyForm = { imageUrl: '', postUrl: '', caption: '', displayOrder: 0 };
 
-/**
- * Galeria curada — posts REAIS do Instagram (link verdadeiro + foto
- * verdadeira), adicionados manualmente aqui. Não sincroniza automaticamente
- * com o Instagram (isso exigiria integração com a Graph API do Meta, conta
- * Business vinculada e renovação periódica de token — ver README do
- * backend). É a alternativa prática: sem depender de credencial externa,
- * sem token pra expirar, e o conteúdo continua sendo real.
- */
+// Galeria curada — posts reais adicionados manualmente, sem sincronizar
+// automaticamente com a Graph API do Instagram.
 export default function InstagramGallery() {
   const [posts, setPosts] = useState(null);
   const [form, setForm] = useState(emptyForm);

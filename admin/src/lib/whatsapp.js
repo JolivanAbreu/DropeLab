@@ -1,13 +1,8 @@
-/**
- * Monta a URL do wa.me para o ADMIN falar com o CLIENTE sobre o frete de um
- * pedido específico. Usa o telefone salvo no cadastro do cliente — nunca o
- * da loja (esse é o lib/whatsapp.js do frontend, para o caminho inverso).
- */
+// Telefone do cliente, não da loja (caminho inverso do lib/whatsapp.js do frontend).
 export function buildCustomerWhatsAppLink(customerPhone, order) {
   const digits = (customerPhone || '').replace(/\D/g, '');
   if (!digits) return null;
 
-  // Assume Brasil (+55) quando o telefone salvo não já vem com código de país
   const withCountryCode = digits.length <= 11 ? `55${digits}` : digits;
 
   const lines = [

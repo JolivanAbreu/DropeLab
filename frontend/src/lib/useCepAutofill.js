@@ -2,12 +2,7 @@ import { useState, useCallback } from 'react';
 import { lookupCep } from './viacep';
 import { unmask } from './masks';
 
-/**
- * Dado um setForm (setState de formulário) e o valor atual do CEP, dispara a
- * busca no ViaCEP assim que o campo tiver 8 dígitos e preenche rua, bairro,
- * cidade e UF automaticamente — sem sobrescrever o que o usuário já digitou
- * manualmente nesses campos, caso o CEP não seja encontrado.
- */
+// Busca no ViaCEP ao completar 8 dígitos; não sobrescreve se o CEP não for encontrado.
 export function useCepAutofill(setForm) {
   const [loadingCep, setLoadingCep] = useState(false);
   const [cepNotFound, setCepNotFound] = useState(false);

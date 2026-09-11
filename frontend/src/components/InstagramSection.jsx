@@ -12,13 +12,7 @@ function InstagramIcon({ size = 20 }) {
   );
 }
 
-/**
- * Vitrine "como no Instagram" — prioriza posts REAIS que o admin curou no
- * painel (link + foto de verdade do perfil, ver Painel → Instagram). Se o
- * admin ainda não cadastrou nenhum post, cai de volta pras fotos mais
- * recentes do catálogo (também reais, cada uma linkando pro produto) —
- * nunca inventa curtidas/posts falsos.
- */
+// Prioriza posts curados pelo admin; sem nenhum, cai pras fotos recentes do catálogo.
 export default function InstagramSection() {
   const [items, setItems] = useState(null); // null = carregando
 
@@ -29,7 +23,6 @@ export default function InstagramSection() {
           setItems(posts.map((p) => ({ key: p.id, href: p.postUrl, external: true, url: p.imageUrl, label: p.caption || 'Ver post' })));
           return;
         }
-        // Fallback: fotos reais do catálogo, sem posts curados ainda
         api.get('/products?sort=newest', { auth: false })
           .then((data) => {
             const withPhotos = (data.data || [])
